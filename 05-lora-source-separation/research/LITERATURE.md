@@ -40,13 +40,20 @@ Host = `umxhq` vocals model. Per-matrix LoRA cost = $r(d_{out}+d_{in})$ (`hu2021
 |---|---|---|---|---|
 | `fc1` | $512\times2974$ | $r\cdot3486$ | 13,944 | 55,776 |
 | `fc2` | $512\times1024$ | $r\cdot1536$ | 6,144 | 24,576 |
-| `fc3` | $2974\times512$ | $r\cdot3486$ | 13,944 | 55,776 |
+| `fc3` | $4098\times512$ (out = 2·nb_output_bins, **full** 2049-bin mask) | $r\cdot4610$ | 18,440 | 73,760 |
 | LSTM `weight_ih` ×(3 layers·2 dir) | $1024\times512$ each | $6\cdot r\cdot1536$ | 36,864 | 147,456 |
 | LSTM `weight_hh` ×(3·2) | $1024\times256$ each | $6\cdot r\cdot1280$ | 30,720 | 122,880 |
-| **Total (all wrapped)** | — | $r\cdot25404$ | **≈101.6 k (1.2%)** | **≈406 k (4.9%)** |
-| LSTM-only variant | — | $r\cdot16896$ | 67.6 k (0.8%) | 270 k (3.3%) |
+| input/output scale+mean (trained in LoRA recipes, not rank-dependent) | $2\cdot1487 + 2\cdot2049$ | $7{,}072$ | 7,072 | 7,072 |
+| **Total (all wrapped, per recipe)** | — | $r\cdot26{,}528 + 7{,}072$ | **113,184 (1.2727%)** | **431,520 (4.8522%)** |
 
-So **both rank-4 and rank-16 sit under the <5% budget** the hypothesis targets (rank-4 all-wrapped ≈1.2%; rank-16 ≈4.9%). "Head-only" (train `fc3` alone) ≈ **18%** of params — the inefficient baseline LoRA should beat. LoRA's **$B=0$ init** means the rank-4/16 models *start identical to zero-shot `umxhq`*, giving a clean forgetting baseline. **Forgetting metric:** source-domain (HQ) vocals SI-SDR *drop* after adapting to the target domain (AAC / genre subset), full-FT vs LoRA — the hypothesis predicts LoRA drops less.
+*(Stage-D correction, 2026-07-13: the original table assumed a bandwidth-cropped
+$2974$-dim `fc3` output; the verified `model.py` maps to the full $2\cdot2049 = 4098$
+bins. Shares are of the 8,893,348-param host, measured == closed form on the mock.)*
+
+So **both rank-4 and rank-16 sit under the <5% budget** the hypothesis targets
+(1.2727% / 4.8522%). "Head-only" (fc3 + bn3 + output scale/mean) is **23.73%** of
+params — not the ≈18% first noted here (same fc3-shape underestimate; logged in
+`../results/DEVIATIONS.md`) — the inefficient baseline LoRA should beat. LoRA's **$B=0$ init** means the rank-4/16 models *start identical to zero-shot `umxhq`*, giving a clean forgetting baseline. **Forgetting metric:** source-domain (HQ) vocals SI-SDR *drop* after adapting to the target domain (AAC / genre subset), full-FT vs LoRA — the hypothesis predicts LoRA drops less.
 
 **Plumbing note (the main risk):** PyTorch `nn.LSTM` packs the 4 gates into `weight_ih_l{k}` / `weight_hh_l{k}` (and `_reverse` for the backward direction). LoRA must wrap these gate-stacked matrices directly (or re-implement the LSTM cell to expose them). Unit-test that a rank-$r$-wrapped LSTM with $B=0$ reproduces the frozen model bit-for-bit before training.
 
