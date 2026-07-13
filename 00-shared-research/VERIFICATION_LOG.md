@@ -99,6 +99,18 @@ _(01 loss-study, 02 aug/scaling, 03 band-split, 05 LoRA, 06 robust, 08 silence, 
 | 06-8 | Blind data cleaning MSS, **2510.15409** | data cleaning for MSS (Oct 2025) | WS | **CONFIRMED (existence)** | Recent related work; must be cited (post-dates base plan). |
 | 06-9 | ε-bleed model $\tilde v=v+\varepsilon a$ | Is it faithful to SDX'23? | — | **OUR CONSTRUCTION** | Controlled simplification of SDXDB23_Bleeding; clearly marked as ours in `fabbro2023-sdx23.md`/LITERATURE. |
 
+### 08 — Silence leakage
+
+| # | Source / ID | Claim checked | Route | Verdict | Notes |
+|---|---|---|---|---|---|
+| 08-1 | museval `metrics.py` | silent frames → NaN, dropped from SDR | GH | **CONFIRMED** | Shared note S7. Foundation: SDR can't measure silence leakage. |
+| 08-2 | Le Roux SI-SDR silence singularity | SI-SDR undefined on silent target | HF/derived | **CONFIRMED** | Shared note S4. |
+| 08-3 | Open-Unmix `data.py` sampling | uniform random-start chunking, no activity/energy/VAD filter | GH | **CONFIRMED** | `random.uniform(0, dur-seq)`; baseline policy for Dir 08. |
+| 08-4 | BSRNN activity detector | activity-based segment mining (pseudo-labels, not sampling) | WS/HF | **CONFIRMED** | Closest "activity-aware" precedent. |
+| 08-5 | BSMamba2 "Mamba2 Meets Silence", **2508.14556** | sparse-vocal robustness via Mamba2; 11.03 dB cSDR | WS | **CONFIRMED** | Kim & Choi, Aug 2025. Same problem, **architecture lever** (not sampling/metric). Novelty-relevant. |
+| 08-6 | SLR silence-leakage metric | Is it published? | — | **OUR CONSTRUCTION** | Formal draft (thresholds/eps/$L_{\min}$) in `silence-metrics-grounding.md §3`. |
+| 08-GAP | Gap-check: controlled chunk-sampling ablation for MSS | Does it exist? | WS | **PARTIAL (novelty-affecting)** | Query 2026-07-13. **RESEARCH_DIRECTIONS "nobody reports a chunk-sampling ablation" is too strong**: forced-singing-% ablation (`[unverified cite]`), Demucs chunk-drop, BSMamba2 all adjacent. **Genuinely novel = the SLR metric + policy-vs-leakage tradeoff.** Flagged to orchestrator; RESEARCH_DIRECTIONS not edited (no firm counter-citation). |
+
 ---
 
 ## Gap-check queries (logged per Step)
