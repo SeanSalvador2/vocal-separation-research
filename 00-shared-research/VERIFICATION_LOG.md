@@ -62,6 +62,18 @@ _(01 loss-study, 02 aug/scaling, 03 band-split, 05 LoRA, 06 robust, 08 silence, 
 | 02-3 | UMX/Demucs aug recipes | gain U(0.25,1.25), channelswap p=0.5, source remixing, sign flip, shift | GH (`data.py`,`augment.py`) | **CONFIRMED** | Code-exact; see shared notes. UMX gain is 0.25–1.25 (not "±3–6 dB" of RESEARCH_NOTES). |
 | 02-GAP | Gap-check: factorized aug ablation + scaling curve for compact MSS | Does it exist? | WS | **NULL (open)** | Query 2026-07-13. Transforms well-documented; Demucs discusses aug *impact*; **one adjacent prior "SVS: a study on training data" 1906.02618 (2019)**. No dedicated factorized+scaling study at compact scale → novelty stands; cite 1906.02618 as closest prior. |
 
+### 03 — Mini band-split
+
+| # | Source / ID | Claim checked | Route | Verdict | Notes |
+|---|---|---|---|---|---|
+| 03-1 | BSRNN, **2209.15174**, TASLP 2023 | band-split + interleaved band/sequence RNN; beats MDX-2021; semi-sup pseudo-labels via activity detector | HF + WS | **CONFIRMED** | Luo & Yu. Vocals **10.01 dB cSDR via DTTNet cross-ref** (not BSRNN's own abstract). |
+| 03-2 | Moises-Light, **2510.06785**, WASPAA 2025 | band-split U-Net on DTTNet lineage; 13× fewer than BS-RoFormer, ½ SCNet | WS | **CONFIRMED** | Hung/Pereira/Korzeniowski. "built on DTTNet" = TFC-TDF V3/DTTNet family + dual-path RoPE; both param claims CONFIRMED. |
+| 03-3 | Mel-RoFormer, **2310.01809** | overlapped mel bands beat heuristic bands on vocals/drums/other (MUSDB18-HQ) | HF | **CONFIRMED** | Wang/Lu/Won. Distinct from 2409.04702 (later vocal-sep paper). Load-bearing for "mel-split > uniform-split." |
+| 03-4 | SCNet, **2401.13276**, ICASSP 2024 | 9.0 dB MUSDB18-HQ no extra data; 48% of HT-Demucs CPU; unequal band compression | HF + WS | **CONFIRMED** | Venue ICASSP 2024 pp.1276–1280 confirmed (WS). |
+| 03-5 | DTTNet, **2309.08684**, ICASSP 2024 | 10.12 dB vocals cSDR; 86.7% fewer params than BSRNN | HF | **CONFIRMED** | Chen/Vekkot/Shukla. Source of the BSRNN 10.01 dB number. |
+| 03-6 | BS-RoFormer, **2309.02612** | SDX'23 1st (500 extra); 9.80 dB no extra data; RoPE | HF | **CONFIRMED** | Lu et al. Ceiling + param reference. |
+| 03-7 | Generalized Bandsplit, **2309.02539** | common-encoder BSRNN generalization; SNR+1-norm loss; psychoacoustic bands | HF | **CONFIRMED** | Watcharasupat et al.; cinematic (DnR), context only. |
+
 ---
 
 ## Gap-check queries (logged per Step)
