@@ -1,0 +1,13 @@
+# Direction 05 T2 (secondary) run (MASTER_PLAN §3.3 run matrix): lora16, seed 0.
+# T2 is resolved at G0b by scripts/make_domains.py --resolve-t2 (genre subset if
+# materializable, else pink-noise 12 dB). The `op` field is PENDING-G0b until then;
+# T2 reuses T1's probe-frozen LRs (§3.3, pre-registered — directional evidence).
+base: base.yaml
+domain: t2
+domain_suffix: null
+op: pending-G0b
+recipe: lora16
+arm: lora16
+rank: 16
+seed: 0
+lr: 1.0e-3

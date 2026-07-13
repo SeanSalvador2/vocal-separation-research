@@ -193,7 +193,12 @@ def evaluate(
 
 
 def _cli(argv: list[str] | None = None) -> None:
-    """``python -m singnet.eval`` / ``scripts/evaluate.py`` entry point (RUN LATER)."""
+    """``python -m singnet.eval`` / ``scripts/evaluate.py`` entry point (RUN LATER).
+
+    Directions 01-03: score a checkpoint (+ floor/oracles) on one split. Direction 05:
+    ``--direction 05 --test-matrix`` builds the consolidated PEFT test session CSV
+    (:func:`singnet.peft.evaluate_umx.build_test_matrix`) instead.
+    """
     import argparse
 
     parser = argparse.ArgumentParser(description="Score checkpoints + oracles on a split (RUN LATER; needs data).")
@@ -205,7 +210,24 @@ def _cli(argv: list[str] | None = None) -> None:
     parser.add_argument("--oracles", action="store_true")
     parser.add_argument("--museval", action="store_true")
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--direction", default=None, choices=[None, "01", "02", "03", "05"],
+                        help="Direction 05 routes --test-matrix to the PEFT test session")
+    parser.add_argument("--test-matrix", action="store_true",
+                        help="Direction 05: build the consolidated test-matrix CSV (RUN LATER)")
+    parser.add_argument("--registry", default="05-lora-source-separation/results/registry.csv",
+                        help="Direction 05 test-matrix: the completed-runs registry")
     args = parser.parse_args(argv)
+
+    if args.direction == "05" and args.test_matrix:
+        from ..peft.evaluate_umx import build_test_matrix
+
+        frame = build_test_matrix(
+            args.registry, shard_root=args.shard_root, splits_csv=args.splits_csv,
+            output_dir=args.output_dir, device=args.device,
+        )
+        print(frame.groupby(["recipe", "eval_set"])["sisdr_vocals_mean"].mean())
+        return
+
     frame = evaluate(
         args.checkpoint, args.split, shard_root=args.shard_root, splits_csv=args.splits_csv,
         output_dir=args.output_dir, oracles=args.oracles, museval=args.museval, device=args.device,

@@ -22,10 +22,16 @@ minutes).
     python scripts/run_sweep.py --direction 03 --stage reduced  # the 6 split runs (mel x3, uniform x3)
     python scripts/run_sweep.py --direction 03 --stage full     # generate + run the confirmations
 
+    # Direction 05 — LoRA / PEFT fine-tuning of umxhq
+    python scripts/run_sweep.py --direction 05 --dry-run        # CPU: recipe/rank/LR/trainable-share (mock)
+    python scripts/run_sweep.py --direction 05 --stage probes   # generate + run the 12 LR probes (RUN LATER)
+    python scripts/run_sweep.py --direction 05 --stage main     # the 12 fine-tune runs (RUN LATER)
+
 ``--dry-run`` (CPU, no GPU, no data) instantiates each config and prints the
 per-config summary that matters for that direction — the augmentation switchboard
-+ subset size (Directions 01/02), or the band edges, chosen width ``c`` and exact
-parameter count (Direction 03) — so a mismatch is caught before any GPU spend.
++ subset size (Directions 01/02), the band edges, chosen width ``c`` and exact
+parameter count (Direction 03), or the recipe / rank / LR / trainable-share on the
+mock host (Direction 05) — so a mismatch is caught before any GPU spend.
 """
 
 from __future__ import annotations
@@ -58,6 +64,10 @@ DIRECTIONS: dict[str, dict[str, str]] = {
         "config_dir": "03-mini-band-split/configs",
         "registry": "03-mini-band-split/results/registry.csv",
     },
+    "05": {
+        "config_dir": "05-lora-source-separation/configs",
+        "registry": "05-lora-source-separation/results/registry.csv",
+    },
 }
 
 ARMS = ["l1mag", "msemag", "logl1mag", "sisdr", "l1mrstft"]  # Direction 01
@@ -85,6 +95,26 @@ D03_REDUCED = [
 ]
 D03_CONTINGENCY = ["contingency_baseline_sisdr_seed0.yaml", "contingency_mel_sisdr_seed0.yaml"]
 
+# Direction 05 launch list (MASTER_PLAN §3.3 run matrix): 8 T1 + 4 T2 = 12 runs.
+# `zeroshot` is not a run (it is the untuned host, scored in the test session), and
+# the LoRA B=0 start reproduces it exactly (§2). The probe configs are GENERATED at
+# RUN LATER by generate_probe_configs_d05 (not pre-committed — they depend on the §3.4
+# grids and are expanded from configs/t1_probe_template.yaml).
+D05_MAIN = [
+    "t1_head_seed0.yaml", "t1_lora4_seed0.yaml",
+    "t1_lora16_seed0.yaml", "t1_lora16_seed1.yaml", "t1_lora16_seed2.yaml",
+    "t1_full_seed0.yaml", "t1_full_seed1.yaml", "t1_full_seed2.yaml",
+    "t2_head_seed0.yaml", "t2_lora4_seed0.yaml", "t2_lora16_seed0.yaml", "t2_full_seed0.yaml",
+]
+# Per-recipe LR probe grids (§3.4): PEFT wants larger LRs than full-FT (THEORY §5).
+D05_PROBE_GRIDS = {
+    "head": ("3.0e-4", "1.0e-3", "3.0e-3"),
+    "lora4": ("3.0e-4", "1.0e-3", "3.0e-3"),
+    "lora16": ("3.0e-4", "1.0e-3", "3.0e-3"),
+    "full": ("3.0e-5", "1.0e-4", "3.0e-4"),
+}
+D05_PROBE_RANK = {"head": "null", "lora4": "4", "lora16": "16", "full": "null"}
+
 
 def _already_done(config_path: Path, registry: str) -> bool:
     """True if the registry shows this config completed to its step budget."""
@@ -100,6 +130,23 @@ def _run_config(config_path: Path, registry: str) -> None:
         return
     print(f"running {config_path.name} (RUN LATER: GPU)")
     result = run(config_path, registry_path=registry)
+    print(f"  -> {result}")
+
+
+def _run_config_d05(config_path: Path, registry: str) -> None:
+    """Direction 05: fine-tune one recipe/domain via the dedicated UMX loop (RUN LATER)."""
+    from singnet.peft.finetune_umx import finetune  # lazy: needs torch + (RUN LATER) data
+
+    cfg = resolve_config(config_path)
+    domain, recipe = str(cfg.get("domain", "standard")), str(cfg["recipe"])
+    run_id = make_run_id(f"{domain}_{recipe}", int(cfg.get("seed", 0)),
+                         cfg.get("budget_name", "ft6k"), hash_config(cfg))
+    row = get_run(registry, run_id)
+    if row and int(row.get("steps_done", 0)) >= int(cfg.get("steps", 6000)):
+        print(f"skip (already complete): {config_path.name}")
+        return
+    print(f"running {config_path.name} (RUN LATER: GPU + umxhq weights)")
+    result = finetune(config_path, registry_path=registry)
     print(f"  -> {result}")
 
 
@@ -177,9 +224,41 @@ def generate_full_configs_d03(config_dir: Path, registry: str, steps: int) -> li
     return paths
 
 
+def generate_probe_configs_d05(config_dir: Path) -> list[Path]:
+    """Direction 05: expand the probe template into 4 recipes x 3 LRs x 500 steps (§3.4).
+
+    RUN LATER (writes ``probes_<recipe>_lr<lr>.yaml`` in the config dir). Each probe
+    inherits ``base.yaml`` on T1, sets the recipe/rank and one grid LR, and runs 500
+    steps on T1 val; the chosen LRs are frozen into the main configs at G2. Generated
+    (not pre-committed) so the §3.4 grids are the single source of truth.
+    """
+    paths: list[Path] = []
+    for recipe, grid in D05_PROBE_GRIDS.items():
+        rank = D05_PROBE_RANK[recipe]
+        for lr in grid:
+            body = (
+                f"# GENERATED LR probe (MASTER_PLAN §3.4): {recipe}, lr={lr}, 500 steps on T1 val.\n"
+                f"# Expanded by run_sweep.py from configs/t1_probe_template.yaml — do not hand-edit.\n"
+                f"base: base.yaml\ndomain: t1_aac64\ndomain_suffix: t1_aac64\n"
+                f"budget_name: probe\nsteps: 500\n"
+                f"recipe: {recipe}\narm: probe_{recipe}\nrank: {rank}\nseed: 0\nlr: {lr}\n"
+            )
+            name = f"probes_{recipe}_lr{lr.replace('.', 'p').replace('-', 'm')}.yaml"
+            path = config_dir / name
+            path.write_text(body, encoding="utf-8")
+            paths.append(path)
+    return paths
+
+
 def configs_for(
     direction: str, stage: str, config_dir: Path, registry: str, *, exploratory: bool, halve: bool
 ) -> list[Path]:
+    if direction == "05":
+        if stage == "probes":
+            return generate_probe_configs_d05(config_dir)
+        if stage == "main":
+            return [config_dir / name for name in D05_MAIN]
+        raise SystemExit("direction 05 stages are 'probes' or 'main' (see --help)")
     if direction == "01":
         if stage == "reduced":
             return d01_reduced(config_dir, exploratory)
@@ -264,10 +343,51 @@ def dry_run_bandsplit(config_paths: list[Path]) -> None:
     print("baseline arm = shared D01 l1mag cell (0 new runs). Verify the ±2 % match above.")
 
 
+def dry_run_d05(config_paths: list[Path]) -> None:
+    """Direction 05 dry-run: recipe / rank / LR / trainable-share on the mock host (no GPU).
+
+    Builds the shape-faithful mock umxhq, applies each config's recipe, and prints the
+    trained parameter count + host-share — the exact numbers that gate G0 pins ({head
+    ~23.7 %, lora4 ~1.27 %, lora16 ~4.85 %} of the 8,893,348-param host) — so a recipe
+    mismatch is caught before any GPU spend. No weights are downloaded.
+    """
+    from singnet.peft import (  # lazy: peft is only needed for the D05 dry-run
+        apply_recipe,
+        load_umxhq,
+        measured_trainable_share,
+        recipe_rank,
+    )
+
+    print(f"DRY RUN — direction 05: {len(config_paths)} configs (no training, mock host)\n")
+    header = (f"{'config':<26} {'domain':<10} {'recipe':<8} {'rank':<5} {'lr':<9} "
+              f"{'trainable':<11} {'share':<9} hash")
+    print(header)
+    print("-" * len(header))
+    for path in config_paths:
+        if not path.exists():
+            print(f"{path.name:<26} MISSING")
+            continue
+        cfg = resolve_config(path)
+        recipe = str(cfg["recipe"])
+        rank = cfg.get("rank") if cfg.get("rank") is not None else recipe_rank(recipe)
+        model = load_umxhq("cpu", mock=True)
+        apply_recipe(model, recipe, r=rank)
+        trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        share = measured_trainable_share(model)
+        print(f"{path.name:<26} {str(cfg.get('domain','?')):<10} {recipe:<8} "
+              f"{str(rank):<5} {str(cfg.get('lr','?')):<9} {trainable:<11,} "
+              f"{share*100:<8.4f}% {hash_config(cfg)}")
+    print("\nShares are of the 8,893,348-param host (H-05a denominator). "
+          "Verify recipe/rank/LR match MASTER_PLAN §3.1/§3.4 before GPU spend.")
+
+
 def dry_run(config_paths: list[Path], direction: str) -> None:
     """Instantiate each config's pipeline; print the switchboard + subset size (no GPU)."""
     if direction == "03":
         dry_run_bandsplit(config_paths)
+        return
+    if direction == "05":
+        dry_run_d05(config_paths)
         return
     print(f"DRY RUN — direction {direction}: {len(config_paths)} configs (no training)\n")
     header = (f"{'config':<32} {'loss':<9} {'seed':<4} {'remix':<6} {'gain':<6} "
@@ -297,8 +417,10 @@ def dry_run(config_paths: list[Path], direction: str) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--direction", choices=["01", "02", "03"], default="01", help="which study to run")
-    parser.add_argument("--stage", default="reduced", choices=["reduced", "full", "contingency"])
+    parser.add_argument("--direction", choices=["01", "02", "03", "05"], default="01",
+                        help="which study to run")
+    parser.add_argument("--stage", default="reduced",
+                        choices=["reduced", "full", "contingency", "probes", "main"])
     parser.add_argument("--dry-run", action="store_true",
                         help="CPU: print switchboard + subset sizes, no training")
     parser.add_argument("--exploratory", action="store_true", help="D01 only: also run the 2 lambda configs")
@@ -316,10 +438,11 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     print(f"direction={args.direction} stage={args.stage}: {len(configs)} configs")
+    runner = _run_config_d05 if args.direction == "05" else _run_config
     for config_path in configs:
         if not config_path.exists():
             raise SystemExit(f"missing config {config_path} (did config generation run?)")
-        _run_config(config_path, registry)
+        runner(config_path, registry)
 
 
 if __name__ == "__main__":

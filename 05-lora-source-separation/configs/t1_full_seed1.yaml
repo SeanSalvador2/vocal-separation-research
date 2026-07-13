@@ -1,0 +1,12 @@
+# Direction 05 T1 (codec-degraded, PRIMARY) run (MASTER_PLAN §3.3 run matrix): full, seed 1.
+# T1 = every stem re-encoded AAC 64 kbps (scripts/make_domains.py --domain t1_aac64).
+# The ONLY identity deltas vs base.yaml are recipe/rank/seed/lr/domain — the
+# controlled-comparison invariant (§3.5). LR is the probe-frozen value (§3.4).
+base: base.yaml
+domain: t1_aac64
+domain_suffix: t1_aac64
+recipe: full
+arm: full
+rank: null
+seed: 1
+lr: 1.0e-4

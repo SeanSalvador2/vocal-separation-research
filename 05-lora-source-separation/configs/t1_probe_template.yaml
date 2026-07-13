@@ -1,0 +1,15 @@
+# Direction 05 LR-PROBE TEMPLATE (MASTER_PLAN §3.4). NOT a run on its own — the
+# probe sweep (scripts/run_sweep.py --direction 05 --stage probes, RUN LATER) expands
+# this into 4 recipes x 3 recipe-appropriate LRs x 500 steps on T1 val, writing
+# probes_<recipe>_lr<lr>.yaml. Grids (§3.4): full-FT in {3e-5,1e-4,3e-4};
+# head/LoRA in {3e-4,1e-3,3e-3}. Chosen LRs are frozen into the main configs at G2.
+base: base.yaml
+domain: t1_aac64
+domain_suffix: t1_aac64
+budget_name: probe
+steps: 500
+recipe: lora16
+arm: probe_lora16
+rank: 16
+seed: 0
+lr: 1.0e-3

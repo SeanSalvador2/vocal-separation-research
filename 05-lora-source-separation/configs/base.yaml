@@ -1,0 +1,48 @@
+# Direction 05 base config (MASTER_PLAN §3, §5). Every recipe/seed/domain config
+# inherits this via `base: base.yaml` and overrides only what differs — so the five
+# recipes are identical except for which parameters train (the LoRA reparametrization)
+# and the per-recipe, probe-frozen learning rate (§3.4, §3.5).
+#
+# These D05 keys (host/domain/recipe/rank/lr/warmup_steps/channelswap/…) are NEW and
+# appear ONLY in Direction-05 configs; Directions 01-03 configs never carry them, so
+# their config hashes are unchanged (asserted in tests/test_config_schema_d05.py). The
+# augmentation block is the UMX recipe: gain + cross-track remix + stereo channel swap,
+# and NO sign flip (`flip: false`) — Open-Unmix does not sign-flip (data.py verified).
+
+# --- experiment identity ---
+host: umxhq                 # the pretrained MIT-licensed host (torch.hub; RUN LATER G1)
+domain: standard            # overridden: t1_aac64 (primary) / t2 (secondary)
+recipe: lora16              # zeroshot | head | lora4 | lora16 | full
+rank: 16                    # LoRA rank (null for head/full/zeroshot)
+arm: lora16                 # mirrors `recipe` for run-id continuity in the shared registry
+seed: 0
+budget_name: ft6k
+
+# --- fine-tune budget & schedule (identical for every trained recipe; §3.3, §3.5) ---
+steps: 6000                 # fine-tune budget
+batch_size: 16              # 16 x 6-s stereo chunks
+chunk_s: 6.0
+sample_rate: 44100
+warmup_steps: 200           # linear warmup, then CONSTANT lr (§3.5)
+lr: 1.0e-3                  # probe-frozen per recipe (§3.4); placeholder until G2 freezes it
+loss: msemag                # UMX-native MSE-on-magnitude (informational; the loop pins it)
+deterministic: false
+
+# --- UMX augmentation recipe (§1.3, §3.3; code-verified) ---
+augment:
+  remix: true               # cross-track vocals + accompaniment remixing
+  gain: true                # per-source gain ~ U(0.25, 1.25)
+  flip: false               # UMX does NOT sign-flip (that is Demucs)
+channelswap: true           # stereo channel swap p=0.5 (UMX `_augment_channelswap`)
+
+# --- domain materialization (RUN LATER; scripts/make_domains.py) ---
+domain_suffix: null         # e.g. t1_aac64 -> reads <stem>.t1_aac64.wav shards
+op: null                    # T2 only: resolved at G0b (genre_subset | pink_noise_12db)
+
+# --- locations (set at data-prep / run time; RUN LATER) ---
+shard_root: null            # decoded STEREO WAV shards (prepare_data.py + make_domains.py)
+splits_csv: 01-loss-function-study/configs/splits.csv   # the shared frozen 86/14/50 split
+registry_path: 05-lora-source-separation/results/registry.csv
+output_dir: checkpoints
+num_workers: 4
+gpu: ""
