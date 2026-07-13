@@ -1,0 +1,209 @@
+\documentclass[11pt]{article}
+
+% Standalone mirror of ../THEORY.md. amsmath/amssymb only; no external figures,
+% no external packages, so it compiles with a bare LaTeX installation.
+% (Compile-untested in the build environment; written to compile with pdflatex.)
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\iSTFT}{\operatorname{iSTFT}}
+\newcommand{\vecop}{\operatorname{vec}}
+\newcommand{\row}{\operatorname{row}}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\SE}{SE}
+\DeclareMathOperator{\relu}{relu}
+\DeclareMathOperator{\BN}{BN}
+
+\title{Theory Notes --- Direction 05:\\ LoRA for Music Source Separation}
+\author{SingNet project}
+\date{Frozen 2026-07-13}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note derives the mathematics implemented in \code{singnet/peft/} +
+\code{scripts/} for Direction 05: parameter-efficient fine-tuning of the pretrained
+Open-Unmix \code{umxhq} vocals separator. The crux (\S3) is LoRA on the
+\emph{gate-stacked} $4h\times d$ recurrent weight of a bidirectional LSTM --- what a
+rank-$r$ update on the stacked matrix means (a shared low-rank input subspace routed
+per gate), why it is valid without re-deriving the cell, and the parametrization
+correctness condition ($B=0\Rightarrow$ bit-exact identity, unit-tested). It gives the
+complete LoRA math, the Open-Unmix architecture equations with each recipe's trainable
+set, the exact trainable-share table (base $8{,}893{,}348$ params; head $23.73\%$,
+lora4 $1.27\%$, lora16 $4.85\%$ of the host --- the numbers the unit tests pin), the
+one-line stem-wise additivity-preservation argument for the codec domain, the
+per-recipe-LR fairness argument, and the gain-ratio delta-method CI. Every \S4 number is
+machine-checked against the built mock \code{nn.Module}.
+\end{abstract}
+
+\paragraph{Notation.} The host is the pretrained Open-Unmix \code{umxhq} vocals model
+$\mathcal U_{\theta_0}$. A stereo mixture magnitude is $|X|\in\mathbb
+R_{\ge0}^{c\times F\times T}$ ($c=2$, $F=n_o=2049$ output bins, $T$ frames); $\mathcal U$
+predicts a non-negative magnitude $\widehat V=\mathcal U(|X|)$ and $\hat
+v=\iSTFT(\widehat V e^{i\angle X})$ (mixture phase, no Wiener). Fine-tuning seeks
+$\theta=\theta_0+\Delta\theta$; the \emph{recipe} fixes which coordinates of
+$\Delta\theta$ are free.
+
+\section{Transfer, PEFT, and adaptation for a mask model}
+Three points on the adaptation--cost curve: \emph{full} fine-tune frees all $|\theta_0|$
+weights (max capacity, max forgetting); \emph{head-only} frees the output remapping
+(cheap, cannot change the representation); \emph{LoRA} frees a low-rank additive update to
+selected matrices, betting the needed change $\Delta W$ has low intrinsic rank at
+$r(d+k)\ll dk$ parameters. PEFT's evidence base is classification/generation (music
+\emph{tagging} at ${<}1\%$ params); source separation is dense regression with no
+published PEFT number (gap verified 2026-07-13). Whether low-rank adaptation transfers to a
+recurrent mask-estimation model is the open question; a full-rank demand would make LoRA
+under-fit --- itself a reportable negative.
+
+\section{LoRA, complete}
+For $W_0\in\mathbb R^{d\times k}$, $x\in\mathbb R^{k}$,
+\[
+W=W_0+\Delta W,\qquad \Delta W=\frac{\alpha}{r}BA,\quad B\in\mathbb R^{d\times r},\
+A\in\mathbb R^{r\times k},
+\]
+\[
+\boxed{\,h=W_0x+\tfrac{\alpha}{r}B(Ax)\,}
+\]
+computed as $z=Ax\in\mathbb R^r$ then $Bz\in\mathbb R^d$ (never forming $BA$).
+\textbf{Init} $A\sim\mathcal N(0,\sigma^2)$, $B=0$, so $\Delta W=0$ and the adapted map
+equals $W_0$ \emph{exactly} at step $0$; for LoRA-wrapped $\mathcal U$ this start is
+zero-shot. \textbf{Merge} $W\leftarrow W_0+\frac{\alpha}{r}BA$ (zero added inference cost).
+\textbf{Count} per matrix: $\#\mathrm{LoRA}(d,k,r)=rk+dr=r(d+k)$ vs.\ full $dk$.
+\textbf{$\alpha=2r$ fixed}: with $s=\alpha/r$, $\partial\mathcal L/\partial
+B=s(\partial\mathcal L/\partial W)A^\top$, so tuning $\alpha$ duplicates tuning the LR ---
+we fix $\alpha=2r$ and put all step-size freedom in the per-recipe LR probe (\S5).
+
+\section{LoRA on a BiLSTM --- the novel plumbing (crux)}
+
+\paragraph{Cell and stacked layout.} One LSTM layer with $x_t\in\mathbb R^d$,
+$h_{t-1}\in\mathbb R^h$:
+\[
+\begin{pmatrix} i_t\\ f_t\\ g_t\\ o_t \end{pmatrix}
+=\begin{pmatrix}\sigma\\\sigma\\\tanh\\\sigma\end{pmatrix}\!
+\Big(\underbrace{W_{ih}}_{4h\times d}x_t+b_{ih}+\underbrace{W_{hh}}_{4h\times h}h_{t-1}+b_{hh}\Big),
+\]
+\[
+c_t=f_t\odot c_{t-1}+i_t\odot g_t,\qquad h_t=o_t\odot\tanh(c_t).
+\]
+PyTorch stacks the four gates by rows in order $(i,f,g,o)$, so \code{weight\_ih\_l}$k$ is
+the flat $4h\times d$ matrix $W_{ih}=[\,W_{ih}^{(i)};W_{ih}^{(f)};W_{ih}^{(g)};W_{ih}^{(o)}\,]$.
+
+\paragraph{A rank-$r$ update on the stacked matrix.} Wrap the whole $W_{ih}$ with one pair
+$A\in\mathbb R^{r\times d}$, $B\in\mathbb R^{4h\times r}$, and partition $B$ by gate,
+$B=[B^{(i)};B^{(f)};B^{(g)};B^{(o)}]$, $B^{(\bullet)}\in\mathbb R^{h\times r}$. Then
+\[
+\Delta(\text{gate }\bullet)=\frac{\alpha}{r}B^{(\bullet)}\underbrace{(Ax_t)}_{z_t\in\mathbb R^r},
+\qquad\bullet\in\{i,f,g,o\}.
+\]
+\textbf{Reading}: one shared $r$-dimensional projection $z_t=Ax_t$ of the input is routed to
+the four gates through gate-specific read-outs $B^{(\bullet)}$ --- the gates share the input
+subspace $\row(A)$ but read different directions out of it. Per-gate wrapping would cost
+$4r(h+d)$ with independent subspaces; stacked costs $r(4h+d)$ ($5rh$ vs.\ $8rh$ at $d=h$),
+cheaper \emph{and} imposing the shared-subspace prior. Stacked is pre-registered primary;
+per-gate is future work.
+
+\paragraph{Validity.} The gate nonlinearities and recurrence act downstream of the matmul
+$W_{ih}x_t$; replacing $W_{ih}$ by $W_{ih}+\frac{\alpha}{r}BA$ perturbs every gate
+pre-activation additively and exactly as an ordinary weight edit --- the cell is unchanged,
+only the shared linear operator is reparametrized. Same for $W_{hh}$ (there $A$ acts on
+$h_{t-1}$).
+
+\paragraph{Bidirectionality/indexing.} \code{LSTM(512,256,num\_layers=3,bidirectional)}: each
+layer's output is $2\cdot256=512=$ the input width, so every \code{weight\_ih\_l}$k$ is
+$1024\times512$ and every \code{weight\_hh\_l}$k$ is $1024\times256$; we wrap all
+$3\times2\times2=12$ matrices $\{$\code{weight\_\{ih,hh\}\_l}$k$, \code{...\_reverse}$\}_{k=0}^2$.
+
+\paragraph{Parametrization correctness.} Register $\pi:W_0\mapsto W_0+\frac{\alpha}{r}BA$ with
+\code{right\_inverse}$=\mathrm{id}$ (stored \code{.original}$=W_0$, frozen). Then
+\[
+B=0\ \Longrightarrow\ \pi(W_0)=W_0\ \Longrightarrow\ \mathcal U_{\text{wrapped}}\equiv\mathcal U_{\theta_0}\ \text{(bit-exact)},
+\]
+verified on CPU with max abs difference $0.0$. \code{nn.LSTM} caches weights in
+\code{\_flat\_weights} at construction, so a forward pre-hook re-pulls the parametrized
+weights before each forward (the update flows through; gradients reach only $A,B$). cuDNN's
+fused kernel de-optimizes on the non-contiguous parametrized weight (slower, equivalent;
+acceptable at $6$k steps). Merge removes the parametrizations (\code{leave\_parametrized});
+the plain LSTM's forward equals the wrapped forward (round-trip diff $0.0$).
+
+\section{The Open-Unmix host, formalized}
+Per frame, $n_b=1487$ cropped input bins, $n_o=2049$ output bins, $c=2$, $H=512$:
+\[
+\begin{aligned}
+\tilde x&=(|X|_{[:n_b]}+\mu_{\text{in}})\odot s_{\text{in}}, &&\mu_{\text{in}},s_{\text{in}}\in\mathbb R^{n_b},\\
+u&=\tanh(\BN_1(W_1\vecop(\tilde x))), &&W_1\in\mathbb R^{512\times2974},\\
+\ell&=\mathrm{LSTM}_{3,\leftrightarrow}(u)\in\mathbb R^{512},\\
+p&=\relu(\BN_2(W_2[u;\ell])), &&W_2\in\mathbb R^{512\times1024},\\
+q&=\BN_3(W_3 p), &&W_3\in\mathbb R^{4098\times512},\\
+\widehat V&=\relu(q\odot s_{\text{out}}+\mu_{\text{out}})\odot|X|, &&s_{\text{out}},\mu_{\text{out}}\in\mathbb R^{2049}.
+\end{aligned}
+\]
+The load-bearing shape is $W_3$: the input is cropped to $n_b=1487$ but the mask spans the
+full $n_o=2049$ bins, so $\mathrm{fc3}$ outputs $2n_o=4098$ (not $2n_b$).
+
+\paragraph{Recipes.} \code{zeroshot}: $\varnothing$. \code{head}: $W_3,\BN_3,s_{\text{out}},\mu_{\text{out}}$.
+\code{lora}$r$: $A,B$ on $\{W_1,W_2,W_3\}\cup\{12$ LSTM matrices$\}$ plus
+$\mu_{\text{in}},s_{\text{in}},s_{\text{out}},\mu_{\text{out}}$. \code{full}: all. BatchNorm
+runs in train mode for every trained recipe (running stats adapt; uniform, pinned).
+
+\paragraph{Trainable-share table (exact; base $8{,}893{,}348$, share of the host).}
+Per-matrix LoRA cost $r(d_{\text{out}}+d_{\text{in}})$ over $\{W_1,W_2,W_3\}$ and the $12$
+recurrent matrices gives $A/B=r\cdot26{,}528$; the trained I/O affine adds $2n_b+2n_o=7072$.
+\[
+\begin{array}{lrr}
+\text{recipe} & \text{trainable} & \text{share}\\\hline
+\text{zeroshot} & 0 & 0.0000\%\\
+\text{head} & 2{,}110{,}470 & 23.7309\%\\
+\text{lora4} & 113{,}184 & 1.2727\%\\
+\text{lora16} & 431{,}520 & 4.8522\%\\
+\text{full} & 8{,}893{,}348 & 100\%
+\end{array}
+\]
+The plan's head estimate ($18\%$) used a symmetric-spectrum approximation ($\mathrm{fc3}$ out
+$=2n_b$); the verified shapes give $\mathrm{fc3}$ out $=2n_o$, hence
+$\text{head}=2{,}098{,}176+8{,}196+2049+2049=2{,}110{,}470\Rightarrow23.73\%$. The LoRA shares
+(the H-05a-relevant ones) match the plan within $\pm0.3$ pp; lora16 is under the $5\%$ budget.
+
+\section{Domain shift, additivity, fairness}
+\textbf{T1 (codec)}: AAC re-encode $\kappa$ shifts both input $|X|$ and target $|V|$ ---
+input+target covariate shift the HQ-trained host never saw. \textbf{Additivity (one line):}
+materialize each stem's $\tilde s=\kappa(s)$ independently, then \emph{define}
+$\tilde m:=\sum_s\tilde s$; then $\tilde m=\tilde v+\tilde a$ holds by construction (the
+mixture is formed as the sum of degraded stems, never re-encoded), so the pair
+$(\tilde m,\tilde v)$ is exactly additive. $\blacksquare$ \textbf{T2}: pink noise added to
+the mixture only, at a fixed SNR (input-only shift; separate-and-denoise), or a genre subset
+if labels materialize (the rule is pre-registered, resolved at G0b). \textbf{Loss}: UMX-native
+MSE on magnitude, $\|\widehat V-|V|\|_2^2$, fixed across recipes. \textbf{LR fairness}: near
+$B=0$, $\partial\mathcal L/\partial B=\frac{\alpha}{r}(\partial\mathcal L/\partial W)A^\top$
+with $A$ small, so LoRA's effective step on $W$ scales differently from full-FT's; a shared LR
+biases the comparison, so each recipe gets its own probe-chosen LR (full-FT
+$\in\{3\mathrm e{-}5,1\mathrm e{-}4,3\mathrm e{-}4\}$, head/LoRA
+$\in\{3\mathrm e{-}4,1\mathrm e{-}3,3\mathrm e{-}3\}$), frozen at G2; schedule Adam + 200-step
+warmup then constant.
+
+\section{Statistics}
+Adapted gain $g_D(R)=\overline{\mathrm{SISDR}}_R^{D}-\overline{\mathrm{SISDR}}_{\text{zeroshot}}^{D}$.
+For $\rho=g_{T1}(\text{lora16})/g_{T1}(\text{full})$ with independent 3-seed cells (variances
+$\hat\sigma_L^2,\hat\sigma_F^2$), the delta method gives
+\[
+\widehat\Var(\rho)\approx\frac{\hat\sigma_L^2/3}{g_F^2}+\frac{g_L^2(\hat\sigma_F^2/3)}{g_F^4},\qquad
+\SE(\rho)=\sqrt{\widehat\Var(\rho)}.
+\]
+Support if $\rho\ge0.9$ with CI excluding $<0.75$; refuted if $\rho<0.9$ with CI excluding
+$\ge0.9$; else mixed. Precondition
+$g_{T1}(\text{full})>\max(2\sigma_{\text{seed}},0.3\,\text{dB})$ or H-05a is not evaluable and
+T2 promotes to primary. Forgetting
+$f(R)=\mathrm{SISDR}_{\text{zeroshot}}^{\text{std}}-\mathrm{SISDR}_R^{\text{std}}$ is anchored to
+zero-shot (the same host under our harness; the LoRA $B=0$ start is zero-shot), and H-05b is
+$f(\text{lora16})<f(\text{full})-\sigma_{\text{seed}}$. The single 15-eval test session (gate
+G3, after val freezes) licenses the two pre-registered comparisons and the
+quality-vs-parameters curve; no post-hoc selection follows it.
+
+\paragraph{Code.} \S2--3 \code{peft/lora.py} (asserted by \code{tests/test\_lora.py}); \S4
+\code{peft/umx\_wrapper.py} (numbers in \code{tests/test\_umx\_wrapper.py}); \S5
+\code{scripts/make\_domains.py}, \code{peft/finetune\_umx.py}; \S6 \code{peft/evaluate\_umx.py}.
+Every \S4 number is machine-checked against the built mock model.
+
+\end{document}
