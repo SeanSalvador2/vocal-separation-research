@@ -22,6 +22,7 @@ Deep-dives: [`papers/luo2022-bsrnn.md`](papers/luo2022-bsrnn.md) (CORE),
 | SCNet (2401.13276) | **context** | unequal band compression (more capacity to info-dense bands) | CONFIRMED | [papers/scnet2024.md](papers/scnet2024.md) |
 | DTTNet (2309.08684) | **context** | lightweight ≠ weak (10.12 dB vocals, 86.7% fewer params than BSRNN) | CONFIRMED | [papers/chen2023-dttnet.md](papers/chen2023-dttnet.md) |
 | BS-RoFormer (2309.02612) | **context (ceiling)** | band-split+transformer SOTA (9.80 dB no extra data) | CONFIRMED | [papers/lu2023-bs-roformer.md](papers/lu2023-bs-roformer.md) |
+| BSRNN replication (2603.09187) | **context (cautionary)** | replicating BSRNN's published numbers is hard even at full scale; optimized variant + public code released | CONFIRMED (WS, orchestrator re-check) | §4 / §6 |
 | Generalized Bandsplit (2309.02539) | **context** | common-encoder BSRNN generalization; SNR + 1-norm loss; overcomplete/psychoacoustic bands | CONFIRMED (HF; shared) | [shared cross-ref](../../00-shared-research/papers/kong2021-cirm-resunet.md) (band analysis) |
 | cIRM ResUNet (2109.05418) | **infrastructure** | complex mask + per-TF-bin analysis; oracle IRM ceiling | CONFIRMED | [shared](../../00-shared-research/papers/kong2021-cirm-resunet.md) |
 
@@ -32,6 +33,7 @@ Deep-dives: [`papers/luo2022-bsrnn.md`](papers/luo2022-bsrnn.md) (CORE),
 ## 4. The gap
 - Every band-split result in the literature is at **large scale, often with extra data, and confounds** band scheme with architecture, capacity, and training recipe. **No published work isolates the band-partition effect in a param-matched compact model on MUSDB-only.** Moises-Light comes closest (efficient band-split) but reports an *efficiency frontier*, not a controlled split-vs-uniform-vs-baseline ablation. Mel-RoFormer isolates band scheme but only at full transformer scale.
 - Consequently a **clean null at 5–10 M params is a genuine, novel finding** ("the band-split advantage is a large-model phenomenon"), and a positive is a strong one.
+- **Reproducibility warning (Mar 2026):** *"The Costs of Reproducibility in Music Separation Research: a Replication of Band-Split RNN"* (Magron, Douwes & Serizel, arXiv **2603.09187**) reports that an experienced team could **not** fully reproduce BSRNN's published numbers from the paper alone, and releases an optimized BSRNN variant with public code. Two implications: (i) it independently validates this direction's modest, controlled, param-matched framing over chasing headline numbers; (ii) their public code is a reference implementation for band-split details (band edges, per-band normalization) worth consulting during implementation.
 
 ## 5. Direction-specific technical notes (param-matching methodology — for MASTER_PLAN)
 The whole experiment stands or falls on **honest parameter matching**. Method:
@@ -48,5 +50,5 @@ The whole experiment stands or falls on **honest parameter matching**. Method:
 ## 6. Risks this literature implies
 - **Null at small scale is likely** — the band-split gains are demonstrated with transformers + extra data; at 5–10 M params the effect may be within seed noise. Pre-register that a clean null is the finding ("band-split is a large-model phenomenon"), not a failure.
 - **Param-matching is the credibility crux** — if the three configs aren't truly matched, any SI-SDR gap is a capacity artifact. Verify counts programmatically and publish the per-module table.
-- **Implementation/test burden** — a new band-split encoder module needs unit tests (round-trip, correct band routing/merge); budget for it (Medium difficulty).
+- **Implementation/test burden** — a new band-split encoder module needs unit tests (round-trip, correct band routing/merge); budget for it (Medium difficulty). Band-split implementations are demonstrably error-prone — even a professional BSRNN replication fell short of published numbers (2603.09187) — so treat their public code as a cross-check.
 - **Confound with mask/loss/STFT** — hold STFT settings, mask type, loss, optimizer, and the 14-track valid protocol fixed across all three; only the front-end changes.

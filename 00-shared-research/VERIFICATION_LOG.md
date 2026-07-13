@@ -73,6 +73,7 @@ _(01 loss-study, 02 aug/scaling, 03 band-split, 05 LoRA, 06 robust, 08 silence, 
 | 03-5 | DTTNet, **2309.08684**, ICASSP 2024 | 10.12 dB vocals cSDR; 86.7% fewer params than BSRNN | HF | **CONFIRMED** | Chen/Vekkot/Shukla. Source of the BSRNN 10.01 dB number. |
 | 03-6 | BS-RoFormer, **2309.02612** | SDX'23 1st (500 extra); 9.80 dB no extra data; RoPE | HF | **CONFIRMED** | Lu et al. Ceiling + param reference. |
 | 03-7 | Generalized Bandsplit, **2309.02539** | common-encoder BSRNN generalization; SNR+1-norm loss; psychoacoustic bands | HF | **CONFIRMED** | Watcharasupat et al.; cinematic (DnR), context only. |
+| 03-8 | BSRNN replication, **2603.09187** (Mar 2026) | "The Costs of Reproducibility in Music Separation Research": BSRNN hard to replicate from the paper alone; optimized variant + public code released | WS | **CONFIRMED** | Magron/Douwes/Serizel. Added during orchestrator review — cautionary framing + reference-code source for Direction 03. |
 
 ### 05 — LoRA source separation
 
@@ -126,3 +127,14 @@ _(01 loss-study, 02 aug/scaling, 03 band-split, 05 LoRA, 06 robust, 08 silence, 
 ## Gap-check queries (logged per Step)
 
 _(PEFT-for-MSS; controlled chunk-sampling ablation for MSS; factorized augmentation ablation — appended with dates + null/positive findings as each relevant direction is written.)_
+
+---
+
+## Orchestrator re-verification (Phase-0 review, 2026-07-13)
+
+The three most novelty-affecting post-2025 discoveries were independently re-verified via
+WebSearch during the Phase-0 review — titles, authors, and scope all match the rows above:
+BSMamba2 (**2508.14556**, Kim & Choi, Aug 2025, 11.03 dB cSDR), "Why LoRA Resists Label
+Noise" (**2602.00084**, Feb 2026), and the BSRNN replication study (**2603.09187**,
+Magron/Douwes/Serizel, Mar 2026 — row 03-8, added in review because it appeared in the
+Phase-0 search sweep but had not been logged or cited in Direction 03).
