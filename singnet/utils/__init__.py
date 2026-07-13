@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
-from .config import deep_merge, hash_config, load_yaml, resolve_config
+from .config import (
+    AUGMENT_DEFAULTS,
+    AUGMENT_KEYS,
+    augment_switches,
+    canonicalize_config,
+    deep_merge,
+    hash_config,
+    load_yaml,
+    resolve_config,
+    track_allowlist_path,
+)
 from .seed import (
     capture_rng_state,
     derive_rng,
@@ -12,10 +22,15 @@ from .seed import (
 )
 
 __all__ = [
+    "AUGMENT_DEFAULTS",
+    "AUGMENT_KEYS",
+    "augment_switches",
+    "canonicalize_config",
     "deep_merge",
     "hash_config",
     "load_yaml",
     "resolve_config",
+    "track_allowlist_path",
     "capture_rng_state",
     "derive_rng",
     "restore_rng_state",

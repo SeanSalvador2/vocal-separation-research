@@ -1,0 +1,5 @@
+# LOO ablation (MASTER_PLAN §3.1): remove GAIN, keep remix + flip. Seed 0.
+base: base.yaml
+seed: 0
+augment:
+  gain: false

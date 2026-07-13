@@ -1,0 +1,5 @@
+# Scaling point (MASTER_PLAN §3.2): 21-song nested subset, full recipe. Seed 1.
+base: base.yaml
+seed: 1
+data:
+  track_allowlist_csv: 02-augmentation-data-scaling/configs/subsets/n21.csv

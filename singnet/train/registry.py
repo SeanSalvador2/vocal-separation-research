@@ -7,7 +7,14 @@ are committed; checkpoints and audio are not.
 Schema (exact column order)::
 
     run_id, arm, seed, budget, config_hash, git_commit, gpu, wall_clock_h,
-    steps_done, best_val_sisdr, final_val_sisdr, sisdr_skip_rate, checkpoint_path
+    steps_done, best_val_sisdr, final_val_sisdr, sisdr_skip_rate, checkpoint_path,
+    aug_remix, aug_gain, aug_flip, n_songs
+
+The last four columns are the Direction-02 additions (MASTER_PLAN §6): the
+augmentation switchboard state and the subset size for the scaling curve. They
+are **appended** so the schema stays backward-compatible — an older Direction-01
+registry (without them) reads back with those columns NaN-filled, and Direction-01
+runs populate them with the full-recipe defaults (all True, 86 songs).
 """
 
 from __future__ import annotations
@@ -33,6 +40,10 @@ REGISTRY_COLUMNS: tuple[str, ...] = (
     "final_val_sisdr",
     "sisdr_skip_rate",
     "checkpoint_path",
+    "aug_remix",
+    "aug_gain",
+    "aug_flip",
+    "n_songs",
 )
 
 
@@ -53,6 +64,11 @@ class RunRecord:
     final_val_sisdr: float = float("nan")
     sisdr_skip_rate: float = float("nan")
     checkpoint_path: str = ""
+    # Direction-02 additions (defaults = the Direction-01 full recipe on 86 songs).
+    aug_remix: bool = True
+    aug_gain: bool = True
+    aug_flip: bool = True
+    n_songs: int = 86
 
     def as_row(self) -> dict[str, Any]:
         return {f.name: getattr(self, f.name) for f in fields(self)}

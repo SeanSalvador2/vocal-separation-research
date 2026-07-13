@@ -32,17 +32,23 @@ def test_sign_flip_only_negates() -> None:
 
 
 def test_pipeline_deterministic_given_seed_and_step() -> None:
-    pipe = AugmentPipeline()
+    # The pipeline now owns its per-transform (seed, name, step) streams, so it
+    # is called with a step index rather than a pre-built generator (Direction 02
+    # §3.5). Same guarantee as before: draws are a pure function of (seed, step).
+    pipe = AugmentPipeline(seed=7)
     src = {
         "vocals": np.linspace(-1, 1, 256, dtype=np.float32),
         "accompaniment": np.linspace(1, -1, 256, dtype=np.float32),
     }
-    out_a = pipe(src, derive_rng(7, 3))
-    out_b = pipe(src, derive_rng(7, 3))
+    out_a = pipe(src, 3)
+    out_b = pipe(src, 3)
     for key in src:
         assert np.array_equal(out_a[key], out_b[key])
-    out_c = pipe(src, derive_rng(7, 4))
+    out_c = pipe(src, 4)
     assert not np.array_equal(out_a["vocals"], out_c["vocals"])
+    # The seed also keys the stream: a different seed gives a different draw.
+    out_d = AugmentPipeline(seed=8)(src, 3)
+    assert not np.array_equal(out_a["vocals"], out_d["vocals"])
 
 
 def test_dataset_deterministic_and_arm_independent(synthetic_store, synthetic_manifest) -> None:

@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
-r"""Run the Direction 01 sweep / confirmation runs (MASTER_PLAN §3.2, §8).
+r"""Run a direction's sweep / confirmation / contingency runs (MASTER_PLAN §3, §8).
 
-**RUN LATER — GPU (per-run runtime in §8).** Iterates the arm/seed configs and
-trains each via ``singnet.train.run``. Fully resumable: a run whose registry row
-already shows ``steps_done >= steps`` is skipped, and an interrupted run resumes
-from its last checkpoint (so a Colab disconnect costs minutes, §12).
+**RUN LATER — GPU (per-run runtime in each direction's §7/§8).** Iterates a
+direction's configs and trains each via ``singnet.train.run``. Fully resumable: a
+run whose registry row already shows ``steps_done >= steps`` is skipped, and an
+interrupted run resumes from its last checkpoint (a Colab disconnect costs
+minutes).
 
-    # the 15-run sweep (5 arms x 3 seeds), REDUCED budget
+    # Direction 01 — the 15-run loss sweep (default direction), REDUCED budget
     python scripts/run_sweep.py --stage reduced
+    python scripts/run_sweep.py --stage reduced --exploratory   # + the 2 lambda configs
+    python scripts/run_sweep.py --stage full                    # 3 confirmation runs
 
-    # the exploratory lambda pair (clearly labelled), REDUCED budget
-    python scripts/run_sweep.py --stage reduced --exploratory
+    # Direction 02 — augmentation factorization + data scaling
+    python scripts/run_sweep.py --direction 02 --dry-run        # CPU: switchboard + subset sizes
+    python scripts/run_sweep.py --direction 02 --stage reduced  # the 9 new runs
+    python scripts/run_sweep.py --direction 02 --stage contingency  # 2 sisdr sensitivity runs
 
-    # confirmation: generate + run the 3 FULL configs (top-2 by mean val SI-SDR
-    # + l1mag) after the sweep analysis is frozen
-    python scripts/run_sweep.py --stage full
-
-    # apply the §3.2 budget-halving rule (REDUCED 8k / FULL 20k) for ALL arms
-    python scripts/run_sweep.py --stage reduced --halve
+``--dry-run`` (CPU, no GPU, no data) instantiates each config's augmentation
+pipeline and prints the switchboard + subset size per config, so a mismatch is
+caught before any GPU spend (Direction 02 gate G1).
 """
 
 from __future__ import annotations
@@ -28,48 +30,70 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from singnet.data import AugmentPipeline, load_track_allowlist  # noqa: E402
 from singnet.train import get_run, make_run_id, read_registry, run  # noqa: E402
-from singnet.utils.config import hash_config, resolve_config  # noqa: E402
+from singnet.utils.config import (  # noqa: E402
+    augment_switches,
+    hash_config,
+    resolve_config,
+    track_allowlist_path,
+)
 
-CONFIG_DIR = Path("01-loss-function-study/configs")
-REGISTRY = "01-loss-function-study/results/registry.csv"
-ARMS = ["l1mag", "msemag", "logl1mag", "sisdr", "l1mrstft"]
+DIRECTIONS: dict[str, dict[str, str]] = {
+    "01": {
+        "config_dir": "01-loss-function-study/configs",
+        "registry": "01-loss-function-study/results/registry.csv",
+    },
+    "02": {
+        "config_dir": "02-augmentation-data-scaling/configs",
+        "registry": "02-augmentation-data-scaling/results/registry.csv",
+    },
+}
+
+ARMS = ["l1mag", "msemag", "logl1mag", "sisdr", "l1mrstft"]  # Direction 01
 SEEDS = [0, 1, 2]
 REDUCED_STEPS, FULL_STEPS = 16000, 40000
 
+# Direction 02 launch lists (MASTER_PLAN §3.1, §3.2, §3.4). The FULL-86 / n86 cell
+# is *not* here: it is bit-identical to Direction 01's l1mag sweep cell and is
+# reused, not retrained (§3.3, asserted by the config-hash-equality test).
+D02_REDUCED = [
+    "loo_no_remix_seed0.yaml", "loo_no_gain_seed0.yaml", "loo_no_flip_seed0.yaml",
+    "loo_none_seed0.yaml",
+    "scale_n21_seed0.yaml", "scale_n21_seed1.yaml", "scale_n21_seed2.yaml",
+    "scale_n43_seed0.yaml", "scale_n64_seed0.yaml",
+]
+D02_CONTINGENCY = ["contingency_full_sisdr_seed0.yaml", "contingency_none_sisdr_seed0.yaml"]
 
-def _already_done(config_path: Path) -> bool:
+
+def _already_done(config_path: Path, registry: str) -> bool:
     """True if the registry shows this config completed to its step budget."""
     cfg = resolve_config(config_path)
     run_id = make_run_id(cfg["arm"], cfg["seed"], cfg.get("budget_name", "custom"), hash_config(cfg))
-    row = get_run(REGISTRY, run_id)
+    row = get_run(registry, run_id)
     return bool(row) and int(row.get("steps_done", 0)) >= int(cfg["steps"])
 
 
-def _run_config(config_path: Path) -> None:
-    if _already_done(config_path):
+def _run_config(config_path: Path, registry: str) -> None:
+    if _already_done(config_path, registry):
         print(f"skip (already complete): {config_path.name}")
         return
     print(f"running {config_path.name} (RUN LATER: GPU)")
-    result = run(config_path, registry_path=REGISTRY)
+    result = run(config_path, registry_path=registry)
     print(f"  -> {result}")
 
 
-def reduced(exploratory: bool) -> list[Path]:
-    configs = [CONFIG_DIR / f"{arm}_seed{seed}_reduced.yaml" for arm in ARMS for seed in SEEDS]
+def d01_reduced(config_dir: Path, exploratory: bool) -> list[Path]:
+    configs = [config_dir / f"{arm}_seed{seed}_reduced.yaml" for arm in ARMS for seed in SEEDS]
     if exploratory:
-        configs += [CONFIG_DIR / "l1mrstft_lam025_seed0_reduced.yaml",
-                    CONFIG_DIR / "l1mrstft_lam100_seed0_reduced.yaml"]
+        configs += [config_dir / "l1mrstft_lam025_seed0_reduced.yaml",
+                    config_dir / "l1mrstft_lam100_seed0_reduced.yaml"]
     return configs
 
 
-def generate_full_configs(steps: int) -> list[Path]:
-    """Pick top-2 arms by mean val SI-SDR (+ l1mag) and write their FULL configs.
-
-    Reads the sweep registry; requires the 15 reduced runs to have completed. The
-    generated files are ``{arm}_seed0_full.yaml`` (MASTER_PLAN §10, "generated").
-    """
-    frame = read_registry(REGISTRY)
+def generate_full_configs(config_dir: Path, registry: str, steps: int) -> list[Path]:
+    """Direction 01: pick top-2 arms by mean val SI-SDR (+ l1mag), write FULL configs."""
+    frame = read_registry(registry)
     if frame.empty:
         raise SystemExit("registry empty — run the reduced sweep first (RUN LATER)")
     reduced_rows = frame[frame["budget"] == REDUCED_STEPS]
@@ -85,30 +109,101 @@ def generate_full_configs(steps: int) -> list[Path]:
             f"# Generated by run_sweep.py from the frozen reduced-sweep ranking.\n"
             f"base: base.yaml\narm: {arm}\nseed: 0\nbudget_name: full\nsteps: {steps}\n"
         )
-        path = CONFIG_DIR / f"{arm}_seed0_full.yaml"
+        path = config_dir / f"{arm}_seed0_full.yaml"
         path.write_text(body, encoding="utf-8")
         paths.append(path)
     return paths
 
 
+def configs_for(
+    direction: str, stage: str, config_dir: Path, registry: str, *, exploratory: bool, halve: bool
+) -> list[Path]:
+    if direction == "01":
+        if stage == "reduced":
+            return d01_reduced(config_dir, exploratory)
+        if stage == "full":
+            return generate_full_configs(config_dir, registry, FULL_STEPS // 2 if halve else FULL_STEPS)
+        raise SystemExit("direction 01 has no 'contingency' stage (see --help)")
+    # direction 02
+    if stage == "reduced":
+        return [config_dir / name for name in D02_REDUCED]
+    if stage == "contingency":
+        return [config_dir / name for name in D02_CONTINGENCY]
+    raise SystemExit(
+        "direction 02 'full'/n86 is the shared Direction-01 l1mag cell (reused, not "
+        "retrained, §3.3) — use --stage reduced or contingency."
+    )
+
+
+def _subset_size(cfg: dict) -> str:
+    """Human label for a config's training-set size (full split or a subset CSV)."""
+    path = track_allowlist_path(cfg)
+    if path is None:
+        return "full (86)"
+    tracks = None
+    if Path(path).exists():
+        try:
+            tracks = load_track_allowlist(path)
+        except Exception:  # noqa: BLE001 — dry-run must never crash on a bad/absent CSV
+            tracks = None
+    if tracks is not None:
+        return f"{len(tracks)} ({Path(path).name})"
+    return f"pending G0b ({Path(path).name})"
+
+
+def dry_run(config_paths: list[Path], direction: str) -> None:
+    """Instantiate each config's pipeline; print the switchboard + subset size (no GPU)."""
+    print(f"DRY RUN — direction {direction}: {len(config_paths)} configs (no training)\n")
+    header = (f"{'config':<32} {'loss':<9} {'seed':<4} {'remix':<6} {'gain':<6} "
+              f"{'flip':<6} {'n_songs':<18} hash")
+    print(header)
+    print("-" * len(header))
+    for path in config_paths:
+        if not path.exists():
+            print(f"{path.name:<32} MISSING")
+            continue
+        cfg = resolve_config(path)
+        sw = augment_switches(cfg)
+        pipe = AugmentPipeline(
+            remix=sw["remix"], gain=sw["gain"], flip=sw["flip"], seed=int(cfg.get("seed", 0))
+        )
+        print(
+            f"{path.name:<32} {str(cfg.get('arm','?')):<9} {str(cfg.get('seed','?')):<4} "
+            f"{str(pipe.remix):<6} {str(pipe.gain):<6} {str(pipe.flip):<6} "
+            f"{_subset_size(cfg):<18} {hash_config(cfg)}"
+        )
+    if direction == "02":
+        base = Path(DIRECTIONS['02']['config_dir']) / "base.yaml"
+        if base.exists():
+            print(f"\nshared FULL-86 cell (= D01 l1mag) config-hash: {hash_config(resolve_config(base))}")
+        print("Verify the switchboard/subset columns match MASTER_PLAN §3.1/§3.2 before GPU spend.")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--stage", required=True, choices=["reduced", "full"])
-    parser.add_argument("--exploratory", action="store_true", help="also run the 2 lambda configs (reduced only)")
-    parser.add_argument("--halve", action="store_true", help="apply the §3.2 budget-halving rule")
+    parser.add_argument("--direction", choices=["01", "02"], default="01", help="which study to run")
+    parser.add_argument("--stage", default="reduced", choices=["reduced", "full", "contingency"])
+    parser.add_argument("--dry-run", action="store_true",
+                        help="CPU: print switchboard + subset sizes, no training")
+    parser.add_argument("--exploratory", action="store_true", help="D01 only: also run the 2 lambda configs")
+    parser.add_argument("--halve", action="store_true", help="D01 full: apply the §3.2 budget-halving rule")
     args = parser.parse_args(argv)
 
-    if args.stage == "reduced":
-        configs = reduced(args.exploratory)
-    else:
-        full_steps = FULL_STEPS // 2 if args.halve else FULL_STEPS
-        configs = generate_full_configs(full_steps)
+    config_dir = Path(DIRECTIONS[args.direction]["config_dir"])
+    registry = DIRECTIONS[args.direction]["registry"]
+    configs = configs_for(
+        args.direction, args.stage, config_dir, registry, exploratory=args.exploratory, halve=args.halve
+    )
 
-    print(f"stage={args.stage}: {len(configs)} configs")
+    if args.dry_run:
+        dry_run(configs, args.direction)
+        return
+
+    print(f"direction={args.direction} stage={args.stage}: {len(configs)} configs")
     for config_path in configs:
         if not config_path.exists():
             raise SystemExit(f"missing config {config_path} (did config generation run?)")
-        _run_config(config_path)
+        _run_config(config_path, registry)
 
 
 if __name__ == "__main__":

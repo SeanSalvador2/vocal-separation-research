@@ -1,0 +1,7 @@
+# LOO ablation (MASTER_PLAN §3.1): remove FLIP, keep remix + gain. Seed 0.
+# Flip is magnitude-invariant, so Δ_flip ≈ 0 is the pre-registered expectation and
+# the design's negative control (THEORY §3, §12): Δ_flip > σ_seed signals a bug.
+base: base.yaml
+seed: 0
+augment:
+  flip: false

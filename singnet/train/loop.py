@@ -29,7 +29,7 @@ from torch import Tensor, nn
 from ..audio.stft import STFT, analyze_chunk
 from ..losses import build as build_loss
 from ..models import build_model
-from ..utils.config import hash_config, resolve_config
+from ..utils.config import augment_switches, hash_config, resolve_config, track_allowlist_path
 from ..utils.seed import capture_rng_state, restore_rng_state, seed_everything
 from .registry import RunRecord, current_git_commit, make_run_id, upsert_run
 
@@ -185,8 +185,9 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
     # Local imports: only needed when actually training, keeps import graph light.
     from torch.utils.data import DataLoader
 
+    from ..data.augment import AugmentPipeline
     from ..data.manifest import Manifest
-    from ..data.musdb_dataset import MusdbChunks, WavShardStore
+    from ..data.musdb_dataset import MusdbChunks, WavShardStore, load_track_allowlist
     from ..eval.evaluate import validation_sisdr
 
     config = resolve_config(config_path)
@@ -208,10 +209,16 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
     store = WavShardStore(shard_root, sample_rate=config.get("sample_rate", 44100))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # The augmentation switchboard (§3.1) and the subset allowlist (§3.2) are the
+    # only two things that vary across this direction's runs; both are read from
+    # the config's canonical form so D01 (augment: bool) and D02 (augment: dict)
+    # configs build the same pipeline object.
+    switches = augment_switches(config)
+    pipeline = AugmentPipeline(remix=switches["remix"], gain=switches["gain"], flip=switches["flip"])
+    allowlist = load_track_allowlist(track_allowlist_path(config))
     train_ds = MusdbChunks(
         store, manifest, "train", seed=seed, chunk_s=config.get("chunk_s", 6.0),
-        augment=config.get("augment", True), remix=config.get("remix", True),
-        length=total_steps * batch_size,
+        track_allowlist=allowlist, pipeline=pipeline, length=total_steps * batch_size,
     )
     loader = DataLoader(
         train_ds, batch_size=batch_size, shuffle=False, drop_last=True,
@@ -281,6 +288,8 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
             wall_clock_h=(time.time() - started) / 3600.0, steps_done=step,
             best_val_sisdr=best_val, final_val_sisdr=final_val, sisdr_skip_rate=skip_rate,
             checkpoint_path=str(best_path),
+            aug_remix=switches["remix"], aug_gain=switches["gain"], aug_flip=switches["flip"],
+            n_songs=train_ds.n_songs,
         ),
     )
     return RunResult(run_id, config_hash, step, best_val, final_val, skip_rate, str(best_path))
