@@ -28,7 +28,7 @@ from torch import Tensor, nn
 
 from ..audio.stft import STFT, analyze_chunk
 from ..losses import build as build_loss
-from ..models import build_model
+from ..models import build_model_from_config
 from ..utils.config import augment_switches, hash_config, resolve_config, track_allowlist_path
 from ..utils.seed import capture_rng_state, restore_rng_state, seed_everything
 from .registry import RunRecord, current_git_commit, make_run_id, upsert_run
@@ -194,6 +194,11 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
     config_hash = hash_config(config)
     seed = int(config.get("seed", 0))
     arm = str(config["arm"])
+    # The loss is usually named by `arm` (Directions 01/02). Direction 03's arms
+    # (baseline/split_mel/split_uniform) all train on `l1mag`, so a `loss` key
+    # decouples the loss from the experimental arm id; absent -> loss == arm
+    # (byte-identical for the old configs, hash unchanged).
+    loss_name = str(config.get("loss", arm))
     budget_name = str(config.get("budget_name", "custom"))
     total_steps = int(config["steps"])
     batch_size = int(config.get("batch_size", 16))
@@ -226,8 +231,8 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
     )
 
     stft = STFT().to(device)
-    model = build_model(config.get("base_channels", 32)).to(device)
-    loss_fn = build_loss(arm, **config.get("loss_kwargs", {})).to(device)
+    model = build_model_from_config(config).to(device)
+    loss_fn = build_loss(loss_name, **config.get("loss_kwargs", {})).to(device)
     optimizer = build_optimizer(model)
     scheduler = build_scheduler(optimizer, total_steps)
     use_amp = bool(config.get("amp", True)) and device.type == "cuda"
@@ -280,6 +285,12 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
     save_checkpoint(ckpt_path, model=model, optimizer=optimizer, scheduler=scheduler,
                     scaler=scaler, step=step, best_metric=best_val, config=config)
     run_id = make_run_id(arm, seed, budget_name, config_hash)
+    model_cfg = config.get("model") or {}
+    base_width = int(
+        model_cfg.get("base_width", config.get("base_channels", 32))
+        if model_cfg.get("arch") == "bandsplit"
+        else config.get("base_channels", 32)
+    )
     upsert_run(
         registry_path,
         RunRecord(
@@ -289,7 +300,7 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
             best_val_sisdr=best_val, final_val_sisdr=final_val, sisdr_skip_rate=skip_rate,
             checkpoint_path=str(best_path),
             aug_remix=switches["remix"], aug_gain=switches["gain"], aug_flip=switches["flip"],
-            n_songs=train_ds.n_songs,
+            n_songs=train_ds.n_songs, base_width=base_width,
         ),
     )
     return RunResult(run_id, config_hash, step, best_val, final_val, skip_rate, str(best_path))

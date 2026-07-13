@@ -1,0 +1,10 @@
+# Contingency run (MASTER_PLAN §3.2). RUN LATER (GPU, ~1.5h). Budget-gated: run
+# ONLY if Direction 01 overturns the default loss (i.e. `sisdr` beats `l1mag`), to
+# check whether the band-split comparison is sensitive to the loss. This is the
+# BASELINE arm (SingNet-C1) trained with `sisdr` instead of `l1mag`, seed 0, REDUCED.
+# Paired with contingency_mel_sisdr_seed0 (the mel variant under the same loss).
+base: base.yaml
+arm: baseline              # SingNet-C1 architecture (no `model:` block)
+loss: sisdr                # the contingency loss (only differs from the shared cell here)
+seed: 0
+budget_name: reduced

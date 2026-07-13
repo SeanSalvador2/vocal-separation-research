@@ -17,8 +17,13 @@ from singnet.train import REGISTRY_COLUMNS, RunRecord, read_registry, upsert_run
 def test_new_columns_are_in_the_schema() -> None:
     for col in ("aug_remix", "aug_gain", "aug_flip", "n_songs"):
         assert col in REGISTRY_COLUMNS
-    # appended at the end so no existing column position changed
-    assert REGISTRY_COLUMNS[-4:] == ("aug_remix", "aug_gain", "aug_flip", "n_songs")
+    # The four D02 columns are appended as a contiguous block after the original
+    # Direction-01 schema (no existing column position changed). Direction 03
+    # appends one more column (base_width) after them — still backward-compatible.
+    d02_block = ("aug_remix", "aug_gain", "aug_flip", "n_songs")
+    start = REGISTRY_COLUMNS.index("aug_remix")
+    assert REGISTRY_COLUMNS[start : start + 4] == d02_block
+    assert REGISTRY_COLUMNS[-1] == "base_width"  # the Direction-03 append
 
 
 def test_runrecord_roundtrips_switchboard(tmp_path) -> None:

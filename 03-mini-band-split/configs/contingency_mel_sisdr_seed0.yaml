@@ -1,0 +1,15 @@
+# Contingency run (MASTER_PLAN §3.2). RUN LATER (GPU, ~1.5h). Budget-gated: run
+# ONLY if Direction 01 overturns the default loss. The mel band-split variant
+# trained with `sisdr` (paired with contingency_baseline_sisdr_seed0) — measures
+# whether split_mel vs baseline holds under the alternative loss, seed 0, REDUCED.
+base: base.yaml
+arm: split_mel
+loss: sisdr
+seed: 0
+budget_name: reduced
+model:
+  arch: bandsplit
+  bands: mel
+  base_width: 23
+  bottleneck_width: 382
+  n_bands: 3

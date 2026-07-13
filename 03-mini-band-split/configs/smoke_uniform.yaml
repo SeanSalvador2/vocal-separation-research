@@ -1,0 +1,20 @@
+# G1 smoke test (MASTER_PLAN §7 run book step 2, §8 gate G1). RUN LATER (GPU, ~0.2h).
+#
+# PASS criteria: single-chunk overfit > +20 dB train SI-SDR within 2k steps (same
+# bar as the baseline and the mel smoke). Uses the matched uniform band-split model.
+base: base.yaml
+arm: split_uniform
+loss: l1mag
+seed: 0
+budget_name: smoke
+steps: 2000
+batch_size: 1
+augment: false
+remix: false
+amp: false
+model:
+  arch: bandsplit
+  bands: uniform
+  base_width: 23
+  bottleneck_width: 382
+  n_bands: 3

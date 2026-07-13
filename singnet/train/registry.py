@@ -8,13 +8,16 @@ Schema (exact column order)::
 
     run_id, arm, seed, budget, config_hash, git_commit, gpu, wall_clock_h,
     steps_done, best_val_sisdr, final_val_sisdr, sisdr_skip_rate, checkpoint_path,
-    aug_remix, aug_gain, aug_flip, n_songs
+    aug_remix, aug_gain, aug_flip, n_songs, base_width
 
-The last four columns are the Direction-02 additions (MASTER_PLAN §6): the
-augmentation switchboard state and the subset size for the scaling curve. They
-are **appended** so the schema stays backward-compatible — an older Direction-01
-registry (without them) reads back with those columns NaN-filled, and Direction-01
-runs populate them with the full-recipe defaults (all True, 86 songs).
+The ``aug_*``/``n_songs`` block is the Direction-02 addition (MASTER_PLAN §6). The
+final ``base_width`` is the Direction-03 addition (§5, §9): the chosen tower/decoder
+base width ``c`` recorded per run (the ``arm`` column — pre-existing — carries the
+band-split arm id ``split_mel``/``split_uniform``, or the loss id for the shared
+baseline cell). Every new column is **appended** so the schema stays
+backward-compatible: an older registry (without them) reads back NaN-filled, and
+runs that predate a column populate it with the identity default (the full recipe
+on 86 songs; ``base_width`` = 32, the baseline width).
 """
 
 from __future__ import annotations
@@ -44,6 +47,7 @@ REGISTRY_COLUMNS: tuple[str, ...] = (
     "aug_gain",
     "aug_flip",
     "n_songs",
+    "base_width",
 )
 
 
@@ -69,6 +73,8 @@ class RunRecord:
     aug_gain: bool = True
     aug_flip: bool = True
     n_songs: int = 86
+    # Direction-03 addition (default = the baseline SingNet-C1 width).
+    base_width: int = 32
 
     def as_row(self) -> dict[str, Any]:
         return {f.name: getattr(self, f.name) for f in fields(self)}

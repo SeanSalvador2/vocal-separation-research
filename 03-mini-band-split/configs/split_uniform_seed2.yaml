@@ -1,0 +1,13 @@
+# Sweep arm (MASTER_PLAN §3.2): split_uniform, seed 2, REDUCED budget.
+# Identical to split_uniform_seed0 except `seed`.
+base: base.yaml
+arm: split_uniform
+loss: l1mag
+seed: 2
+budget_name: reduced
+model:
+  arch: bandsplit
+  bands: uniform
+  base_width: 23
+  bottleneck_width: 382
+  n_bands: 3

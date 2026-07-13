@@ -1,0 +1,16 @@
+# Sweep arm (MASTER_PLAN §3.2): split_uniform, seed 0, REDUCED budget.
+# The CONTROL that isolates "splitting" from "mel spacing" — 3 equal-BIN-width
+# towers (edges [0, 683, 1365, 2048]), same param match as split_mel (c=23,
+# b5=382 -> 9,841,896 params by construction; the band edges change compute, not
+# parameters). Only `model.bands` differs from split_mel_seed0.
+base: base.yaml
+arm: split_uniform
+loss: l1mag
+seed: 0
+budget_name: reduced
+model:
+  arch: bandsplit
+  bands: uniform           # equal-bin band edges (bins [0, 683, 1365, 2048])
+  base_width: 23
+  bottleneck_width: 382
+  n_bands: 3

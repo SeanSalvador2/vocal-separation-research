@@ -1,0 +1,17 @@
+# Sweep arm (MASTER_PLAN §3.2): split_mel, seed 0, REDUCED budget.
+# 3 mel-spaced band towers, param-matched to the baseline (c=23, b5=382 ->
+# 9,841,896 params, +0.06 %; scripts/match_params.py, THEORY §4). Only `seed`
+# varies across the three split_mel configs — the controlled-comparison invariant.
+# The `model:` block is the ONLY identity delta vs the baseline cell (base.yaml),
+# so it (and it alone) distinguishes this run's config hash.
+base: base.yaml
+arm: split_mel
+loss: l1mag                # all three arms train on the project-default loss
+seed: 0
+budget_name: reduced
+model:
+  arch: bandsplit
+  bands: mel               # equal-mel band edges (bins [0, 142, 597, 2048])
+  base_width: 23           # chosen c (scripts/match_params.py)
+  bottleneck_width: 382    # 16c + 14 (single bottleneck bump, §3.1)
+  n_bands: 3

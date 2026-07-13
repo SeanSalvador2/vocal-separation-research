@@ -1,0 +1,14 @@
+# Sweep arm (MASTER_PLAN §3.2): split_mel, seed 1, REDUCED budget.
+# Identical to split_mel_seed0 except `seed` (controls data order/augmentation;
+# init is per-seed Kaiming — see §3.3 note that seeds do not match init across arms).
+base: base.yaml
+arm: split_mel
+loss: l1mag
+seed: 1
+budget_name: reduced
+model:
+  arch: bandsplit
+  bands: mel
+  base_width: 23
+  bottleneck_width: 382
+  n_bands: 3

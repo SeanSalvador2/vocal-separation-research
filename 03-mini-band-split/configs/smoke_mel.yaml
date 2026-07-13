@@ -1,0 +1,25 @@
+# G1 smoke test (MASTER_PLAN §7 run book step 2, §8 gate G1). RUN LATER (GPU, ~0.2h).
+#
+# PASS criteria (measured, not asserted here): a single-chunk overfit reaches
+# train SI-SDR > +20 dB within 2k steps — the SAME bar as the baseline smoke
+# (D01 smoke_overfit). If the mel towers cannot overfit one chunk, debug the
+# towers/routing, not the sweep (§8 "on fail").
+#
+# Overfit is forced by tiny loader length (augment/remix OFF) so the same few
+# chunks replay. Uses the matched mel band-split model.
+base: base.yaml
+arm: split_mel
+loss: l1mag
+seed: 0
+budget_name: smoke
+steps: 2000
+batch_size: 1
+augment: false
+remix: false
+amp: false
+model:
+  arch: bandsplit
+  bands: mel
+  base_width: 23
+  bottleneck_width: 382
+  n_bands: 3

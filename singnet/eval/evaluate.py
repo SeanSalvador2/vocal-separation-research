@@ -28,7 +28,7 @@ from torch import Tensor
 
 from ..audio.stft import STFT
 from ..metrics.si_sdr import si_sdr, si_sdr_improvement
-from ..models import build_model
+from ..models import build_model_from_config
 from .overlap_add import separate_track
 
 EPS = 1e-8
@@ -144,8 +144,11 @@ def evaluate(
     if checkpoint is not None:
         from ..train.loop import load_checkpoint
 
-        model = build_model().to(dev)
-        load_checkpoint(checkpoint, model=model, restore_rng=False)
+        # Build the architecture the checkpoint was trained with (baseline or a
+        # Direction-03 band-split variant) from its saved config, then load weights.
+        payload = load_checkpoint(checkpoint, restore_rng=False)
+        model = build_model_from_config(payload.get("config") or {}).to(dev)
+        model.load_state_dict(payload["model"])
         model.eval()
 
     rows: list[TrackScores] = []
