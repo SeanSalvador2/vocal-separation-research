@@ -74,6 +74,17 @@ _(01 loss-study, 02 aug/scaling, 03 band-split, 05 LoRA, 06 robust, 08 silence, 
 | 03-6 | BS-RoFormer, **2309.02612** | SDX'23 1st (500 extra); 9.80 dB no extra data; RoPE | HF | **CONFIRMED** | Lu et al. Ceiling + param reference. |
 | 03-7 | Generalized Bandsplit, **2309.02539** | common-encoder BSRNN generalization; SNR+1-norm loss; psychoacoustic bands | HF | **CONFIRMED** | Watcharasupat et al.; cinematic (DnR), context only. |
 
+### 05 — LoRA source separation
+
+| # | Source / ID | Claim checked | Route | Verdict | Notes |
+|---|---|---|---|---|---|
+| 05-1 | LoRA, **2106.09685**, ICLR 2022 | $\Delta W=BA$; 10,000× fewer params / 3× less mem vs GPT-3; on-par/better | WS | **CONFIRMED** | Hu/Shen/Wallis/Allen-Zhu/Li/Wang/Wang/Chen. Not on HF search; WS-verified. |
+| 05-2 | PETL for music, **2411.19371** | adapters/LoRA ≥ full-FT at <1% params (0.36%/0.22%) on music tagging | WS | **CONFIRMED** | **Title = "Parameter-Efficient *Transfer Learning* for Music Foundation Models"** (Ding et al.); RESEARCH_NOTES paraphrase noted. Scope = tagging, NOT MSS. |
+| 05-3 | Transfer→dialog, **2106.09093** | UMX/Spleeter/Conv-TasNet full-FT transfer to dialog separation | WS | **CONFIRMED** | Strauss/Paulus/Torcoli/Edler. **Full FT, not PEFT** — sharpens the gap. |
+| 05-4 | Continual SVS, **2512.02432** | U-Net + human-marks-false-positives continual adaptation | WS | **CONFIRMED (existence/scope)** | Dec-2025 arXiv record. A WS-summary "2021 symposium" line is inconsistent with the ID and NOT relied on. |
+| 05-5 | UMX LoRA target shapes | fc1/fc2/fc3 + 3-layer BiLSTM weight_ih/hh; ~8.3 M total; r4≈1.2%, r16≈4.9% | GH (`model.py`) | **CONFIRMED** | Param budget computed from code shapes (nb_bins≈1487 assumed; verify programmatically). |
+| 05-GAP | Gap-check: PEFT/LoRA-for-MSS by mid-2026 | Does any published LoRA-for-MSS study exist? | WS | **NULL (open) — KEY** | Query 2026-07-13. LoRA in music = generation, beat-tracking (2503.10086), deepfake — **none for source separation**. Direction 05 novelty VERIFIED. Cross-cut: "Why LoRA Resists Label Noise" 2602.00084 (→ Dir 06). |
+
 ---
 
 ## Gap-check queries (logged per Step)
