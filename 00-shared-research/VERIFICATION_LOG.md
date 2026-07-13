@@ -44,6 +44,15 @@ Rows are grouped: **Shared library** (this step), then one block appended per di
 
 _(01 loss-study, 02 aug/scaling, 03 band-split, 05 LoRA, 06 robust, 08 silence, 10 distillation — appended below as each direction is written.)_
 
+### 01 — Loss-function study
+
+| # | Source / ID | Claim checked | Route | Verdict | Notes |
+|---|---|---|---|---|---|
+| 01-1 | Gusó et al., **2202.07968**, ICASSP 2022 | Controlled MSS loss benchmark; SDR can mislead; recommends spectrogram/phase-sensitive losses (`L2freq`/`SISDRfreq`/`LOGL2freq`/`LOGL1freq`) | WS | **PARTIAL** | Title/authors/venue/scope CONFIRMED. **Specific recommended loss names + ranking `[UNVERIFIED]`** — body unreadable (arxiv/ar5iv/arxiv-vanity/jordipons all blocked/403). Verified direction (SDR misleading; spectrogram losses competitive) matches RESEARCH_DIRECTIONS §1.2. |
+| 01-2 | Parallel WaveGAN, **1910.11480**, ICASSP 2020 | MR-STFT loss = spectral convergence + log-mag; 1.44 M params, 4.16 MOS | HF | **CONFIRMED** | Yamamoto/Song/Kim. |
+| 01-3 | `auraloss/freq.py` (MR-STFT impl) | $\mathcal L_{sc}=\lVert|S|-|\hat S|\rVert_F/\lVert|S|\rVert_F$; log-mag L1; `fft=[1024,2048,512]`, `hop=[120,240,50]`, `win=[600,1200,240]` | GH | **CONFIRMED** | Code-exact defaults. |
+| 01-4 | Demucs v1 loss claim (L1 > SI-SNR) | Attribution to 1911.13254 | WS + GH | **PARTIAL** | L1-vs-L2 ablation CONFIRMED; **clean L1-vs-SI-SNR ablation NOT in paper** (indirect via Conv-TasNet). Direction 01 leans on Gusó for the controlled claim; RESEARCH_DIRECTIONS not edited. |
+
 ---
 
 ## Gap-check queries (logged per Step)
