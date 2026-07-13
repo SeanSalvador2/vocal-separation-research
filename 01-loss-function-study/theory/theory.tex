@@ -1,0 +1,278 @@
+\documentclass[11pt]{article}
+
+% Standalone mirror of ../THEORY.md. amsmath/amssymb only; no external figures,
+% no external packages, so it compiles with a bare LaTeX installation.
+% (Compile-untested in the build environment; written to compile with pdflatex.)
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\STFT}{\operatorname{STFT}}
+\newcommand{\iSTFT}{\operatorname{iSTFT}}
+\newcommand{\sign}{\operatorname{sign}}
+\newcommand{\mean}{\operatorname{mean}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\title{Theory Notes --- Direction 01:\\ A Controlled Loss-Function Study for
+Compact Vocal Separation}
+\author{SingNet project}
+\date{Frozen 2026-07-13}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note derives the mathematics implemented in the \code{singnet/} package for
+the loss-function study: the STFT front end and its perfect-reconstruction
+condition, the mask family and its oracle bounds, the five training losses (with
+the full SI-SDR projection derivation and its pathologies), the reachable-set
+argument for why optimising one loss need not optimise SI-SDR, the exact U-Net
+parameter count, and the statistics that license the study's claims. It mirrors
+\code{THEORY.md}; the parameter count in Section~5 is the number asserted by
+\code{tests/test\_model.py}.
+\end{abstract}
+
+\paragraph{Notation.} A mono mixture waveform is $x\in\mathbb R^{L}$ at
+$44.1$\,kHz, with STFT $X=\STFT(x)\in\mathbb C^{F\times T}$, magnitude $|X|$, and
+phase $\angle X$. The target vocals are $v$ (STFT $S$), the accompaniment $a$
+(STFT $A$), with $x=v+a$ and, by linearity, $X=S+A$. The network predicts a soft
+mask $M\in[0,1]^{F\times T}$; the vocal estimate is
+$\widehat V=M\odot|X|\,e^{i\angle X}$ and $\hat v=\iSTFT(\widehat V)$.
+
+\section{Signals, STFT/iSTFT, and the COLA condition}
+
+\subsection{Definitions}
+With analysis window $w$ of length $N=n_{\mathrm{fft}}$ and hop $H$,
+\[
+X[k,m]=\sum_{n=0}^{N-1}w[n]\,x[n+mH]\,e^{-i2\pi kn/N}.
+\]
+We pin $N=4096$, $H=1024=N/4$, a periodic Hann window, and centred framing. A
+$6$\,s chunk ($L=264{,}600$) gives $F=N/2+1=2049$ bins and $T=259$ frames.
+Reconstruction is weighted overlap-add,
+\[
+\hat x[n]=\frac{\sum_m w[n-mH]\bigl(\tfrac1N\sum_k X[k,m]e^{i2\pi k(n-mH)/N}\bigr)}
+{\sum_m w^2[n-mH]}.
+\]
+(\code{singnet/audio/stft.py}: \code{STFT.transform}/\code{STFT.inverse}; the
+round trip is tested below $-60$\,dB.)
+
+\subsection{Perfect reconstruction for Hann at hop $N/4$}
+WOLA inverts the STFT exactly iff the squared window tiles to a positive
+constant (the NOLA condition). For $w[n]=\tfrac12\bigl(1-\cos\tfrac{2\pi n}{N}\bigr)$,
+\[
+w^2[n]=\tfrac38-\tfrac12\cos\tfrac{2\pi n}{N}+\tfrac18\cos\tfrac{4\pi n}{N}.
+\]
+At hop $H=N/4$ the four shifts $n-jN/4$ ($j=0,1,2,3$) sample each cosine over a
+full set of equally spaced phases, so both cosine sums vanish and
+\[
+\sum_m w^2[n-mH]=4\cdot\tfrac38=\tfrac32>0 \quad\text{(constant)},
+\]
+giving exact reconstruction. Hence the differentiable iSTFT used by the waveform
+losses is faithful.
+
+\subsection{Magnitude with mixture phase}
+Phase is hard to regress, and the mixture phase is a strong prior wherever a
+source dominates a bin. The mask family fixes $\angle X$ and learns only the
+non-negative gain: since $M$ is real,
+$\widehat V=M\odot|X|e^{i\angle X}=M\odot X$ scales magnitude and preserves phase
+(\code{apply\_mask}).
+
+\subsection{Nyquist row}
+The real FFT returns $2049$ bins; bin $2048$ is the real-valued Nyquist bin with
+negligible music energy. The network uses the first $2048=2^{11}$ bins (a power
+of two, so five stride-2 layers reach a $64\times8$ bottleneck) and re-appends
+the Nyquist row with mask $1.0$ at reconstruction (\code{drop\_nyquist},
+\code{append\_nyquist}).
+
+\section{The mask family and its bounds}
+
+\subsection{Ratio mask and sigmoid bound}
+The head applies a sigmoid, $M=\sigma(z)\in(0,1)$, so
+$\widehat{|S|}=M\odot|X|\le|X|$: a bounded mask can only attenuate.
+
+\subsection{Oracle IRM and IBM}
+\[
+M_{\mathrm{IRM}}=\frac{|S|}{|S|+|A|+\varepsilon}\in[0,1),\qquad
+M_{\mathrm{IBM}}=\mathbf 1\bigl[\,|S|>|A|\,\bigr].
+\]
+Both are (limits of) $[0,1]$ masks, so with the mixture phase they upper-bound
+this family at this resolution (\code{eval/evaluate.py}: \code{oracle\_irm},
+\code{oracle\_ibm}).
+
+\subsection{Wiener/MMSE connection}
+Under a Gaussian model of independent source coefficients, the MMSE estimate of
+$S$ given $X$ is the Wiener gain $M_{\mathrm W}=|S|^2/(|S|^2+|A|^2)$; the
+magnitude IRM is its amplitude-domain analogue, both monotone in the local SNR.
+
+\subsection{Where a bounded mask is insufficient}
+Because $X=S+A$ and interferers can partially cancel the target, $|X|$ can be
+smaller than $|S|$, forcing the ideal gain $|S|/|X|>1$; Kong et al.\ (2021)
+measure this on $22\%$ of MUSDB18 bins. A $[0,1]$ mask cannot represent those
+bins, so the ceiling of ``magnitude mask $+$ mixture phase'' lies below the
+complex-mask (cIRM) oracle
+$\widehat S=|M|\,|X|\,e^{i(\angle X+\angle M)}$.
+
+\section{The five losses}
+Write $\widehat{|S|}=M\odot|X|$; means are over bins or valid samples. All losses
+run in float32 in an autocast-disabled region (\code{losses/\_base.py}).
+
+\subsection{\code{l1mag} (Spleeter)}
+\[
+\mathcal L=\mean\bigl|M\odot|X|-|S|\bigr|,\qquad
+\frac{\partial\mathcal L}{\partial M}=\frac{1}{FT}\,\sign\!\bigl(M\odot|X|-|S|\bigr)\odot|X|.
+\]
+Sign-only gradient: robust to loud outliers, phase-blind.
+
+\subsection{\code{msemag} (Open-Unmix)}
+\[
+\mathcal L=\mean\bigl(M\odot|X|-|S|\bigr)^2,\qquad
+\frac{\partial\mathcal L}{\partial M}=\frac{2}{FT}\,\bigl(M\odot|X|-|S|\bigr)\odot|X|.
+\]
+Error-scaled gradient: loud bins dominate; chases spectral peaks.
+
+\subsection{\code{logl1mag} (Gus\'o \code{LOGL1freq})}
+\[
+\mathcal L=\mean\bigl|\log(M\odot|X|+\varepsilon_{\log})-\log(|S|+\varepsilon_{\log})\bigr|,
+\quad\varepsilon_{\log}=10^{-5},
+\]
+with gradient $\propto\sign(\cdot)\odot|X|/(M\odot|X|+\varepsilon_{\log})$: the
+$1/(\cdot)$ factor up-weights quiet bins (dynamic-range compression).
+
+\subsection{\code{sisdr} (Le Roux 2019)}
+The estimate is $\hat v=\iSTFT(M\odot X)$. The scalar $\alpha$ minimises
+$\|\hat v-\alpha v\|^2$:
+\[
+\frac{d}{d\alpha}\|\hat v-\alpha v\|^2=-2\langle\hat v-\alpha v,v\rangle=0
+\ \Longrightarrow\ \alpha=\frac{\langle\hat v,v\rangle}{\|v\|^2},
+\]
+so $s_{\mathrm{target}}=\alpha v$ is the orthogonal projection of $\hat v$ onto
+$\operatorname{span}(v)$ and $e=\alpha v-\hat v\perp v$. Then
+\[
+\text{SI-SDR}(\hat v,v)=10\log_{10}\frac{\|\alpha v\|^2}{\|\alpha v-\hat v\|^2},
+\qquad \mathcal L_{\mathrm{sisdr}}=-\overline{\text{SI-SDR}}.
+\]
+
+\paragraph{Scale invariance (both arguments).} For $c\neq0$: $\hat v\mapsto c\hat v$
+gives $\alpha\mapsto c\alpha$ and both norms scale by $c^2$ (unchanged);
+$v\mapsto cv$ gives $\alpha\mapsto\alpha/c$ with
+$s_{\mathrm{target}}=\alpha v\mapsto(\alpha/c)(cv)=\alpha v$ and $e$ unchanged
+(unchanged).
+
+\paragraph{Silence singularity and guard.} If $v=0$ then $\|v\|^2=0$ and
+$\alpha=0/0$ is undefined. The code adds $\varepsilon=10^{-8}$ to numerator and
+denominator and, for the \code{sisdr} arm only, excludes any chunk with target
+RMS below $-60$\,dBFS (amplitude $10^{-3}$) \emph{before} the SI-SDR arithmetic,
+logging the skip rate (MASTER\_PLAN \S4.4). (\code{metrics/si\_sdr.py},
+\code{losses/sisdr.py}.)
+
+\subsection{\code{l1mrstft} (Parallel WaveGAN / auraloss)}
+\[
+\mathcal L=\mean\bigl|M\odot|X|-|S|\bigr|+\lambda\sum_{m=1}^{3}
+\bigl(\mathcal L^{(m)}_{\mathrm{sc}}+\mathcal L^{(m)}_{\mathrm{mag}}\bigr),\quad\lambda=0.5,
+\]
+with, per resolution on waveforms $(\hat v,v)$,
+\[
+\mathcal L_{\mathrm{sc}}=\frac{\bigl\|\,|S_m|-|\hat S_m|\,\bigr\|_F}{\bigl\|\,|S_m|\,\bigr\|_F},
+\qquad
+\mathcal L_{\mathrm{mag}}=\mean\bigl|\log(|S_m|+\varepsilon_{\log})-\log(|\hat S_m|+\varepsilon_{\log})\bigr|,
+\]
+resolutions $\mathrm{fft}=[1024,2048,512]$, $\mathrm{hop}=[120,240,50]$,
+$\mathrm{win}=[600,1200,240]$ (Hann). Spectral convergence emphasises peaks; the
+log term emphasises low-energy detail. MASTER\_PLAN \S6 pins a \emph{sum} over
+resolutions (auraloss averages; the difference is a constant in $\lambda$).
+
+\section{Why optimising loss $X$ need not optimise SI-SDR}
+
+\subsection{The reachable set}
+Fix $X$. The model can only produce
+\[
+\mathcal R(X)=\bigl\{\,\iSTFT(M\odot X):M\in[0,1]^{F\times T}\,\bigr\},
+\]
+which is bounded ($|\widehat V|\le|X|$) and phase-locked (every element carries
+$\angle X$). The true $v$ is generally \emph{not} in $\mathcal R(X)$ (its
+magnitude may exceed $|X|$; its phase differs).
+
+\subsection{Different losses, different projections}
+Each loss induces a distance and hence a projection
+$\hat v_{\mathcal L}=\argmin_{u\in\mathcal R(X)}\mathrm{dist}_{\mathcal L}(u,v)$.
+Magnitude losses (phase-blind, differently weighted) and SI-SDR
+(scale-invariant, phase-sensitive) generally have different minimisers on the
+same constrained set, and neither need equal the SI-SDR-optimal element. Since
+the phase error is common to all $M$, the arms differ only in magnitude
+allocation; whether SI-SDR's allocation beats L1's at this capacity is the
+empirical content of hypothesis H-01a (the bet: it does not, beyond seed noise).
+
+\subsection{Bake-Off implication for H-01b}
+For vocals, BSS-Eval SDR is already the best perceptual proxy (Jaffe \&
+Burgoyne, 2025), so MR-STFT is not expected to raise SI-SDR. Two estimates in
+$\mathcal R(X)$ can share SI-SDR yet differ in residual structure, to which the
+scalar SI-SDR is blind; MR-STFT reshapes that residual across resolutions.
+Therefore H-01b is judged by the blind listening check \emph{at equal SI-SDR},
+not by SI-SDR.
+
+\section{U-Net parameter count and receptive field}
+A \code{Conv2d}$(c_{\mathrm{in}},c_{\mathrm{out}})$ or
+\code{ConvTranspose2d} with $5\times5$ kernels has
+$25\,c_{\mathrm{in}}c_{\mathrm{out}}+c_{\mathrm{out}}$ parameters (bias included);
+\code{BatchNorm2d}$(c)$ adds $2c$; the $1\times1$ head adds $33$.
+
+\begin{center}
+\begin{tabular}{llr}
+\hline
+Block & Layer & Params \\
+\hline
+enc1 & Conv$5^2$ $1\!\to\!32$ + BN   & 896 \\
+enc2 & Conv$5^2$ $32\!\to\!64$ + BN  & 51{,}392 \\
+enc3 & Conv$5^2$ $64\!\to\!128$ + BN & 205{,}184 \\
+enc4 & Conv$5^2$ $128\!\to\!256$ + BN& 819{,}968 \\
+enc5 & Conv$5^2$ $256\!\to\!512$ + BN& 3{,}278{,}336 \\
+dec1 & ConvT$5^2$ $512\!\to\!256$ + BN& 3{,}277{,}568 \\
+dec2 & ConvT$5^2$ $512\!\to\!128$ + BN& 1{,}638{,}784 \\
+dec3 & ConvT$5^2$ $256\!\to\!64$ + BN & 409{,}792 \\
+dec4 & ConvT$5^2$ $128\!\to\!32$ + BN & 102{,}496 \\
+dec5 & ConvT$5^2$ $64\!\to\!32$ + BN  & 51{,}296 \\
+head & Conv$1^2$ $32\!\to\!1$         & 33 \\
+\hline
+\textbf{total} & & \textbf{9{,}835{,}745} \\
+\hline
+\end{tabular}
+\end{center}
+
+Decoder inputs are doubled by skip concatenation (dec2 takes $256+256=512$
+channels); Dropout2d$(0.5)$ on dec1--dec3 has no parameters. The count is
+asserted in \code{tests/test\_model.py}. For $5\times5$ stride-2 convolutions the
+encoder receptive field grows as $r_\ell=r_{\ell-1}+(k-1)\prod_{i<\ell}s_i$ with
+$k=5,s=2$: $r=5,13,29,61,125$, so each bottleneck unit sees $\approx125$ bins and
+frames of context.
+
+\section{Statistics of the design}
+
+\subsection{Seed noise}
+Three seeds per arm give a between-seed std $s_{\mathrm{arm}}$; for the H-01a pair
+$\sigma_{\mathrm{seed}}=\sqrt{\tfrac12(s^2_{\mathrm{sisdr}}+s^2_{\mathrm{l1}})}$
+is the band drawn on every sweep figure. With
+$\Delta=\overline{\text{SI-SDR}}_{\mathrm{sisdr}}-\overline{\text{SI-SDR}}_{\mathrm{l1}}$,
+H-01a is supported if $\Delta\le+\sigma_{\mathrm{seed}}$ (and the test pair does
+not reverse it), refuted if $\Delta>+\sigma_{\mathrm{seed}}$ (and the test pair
+confirms with a $95\%$ CI excluding $0$), mixed otherwise.
+$\sigma_{\mathrm{seed}}$ quantifies training stochasticity only --- not the
+song population, and not a single-seed $p$-value.
+
+\subsection{Paired bootstrap over tracks}
+For per-track deltas $d_t$ over the $50$ test tracks, resampling tracks with
+replacement $10{,}000$ times gives a $95\%$ CI for $\mathbb E[d]$. Pairing
+removes track-difficulty variance; $50$ tracks make the CI honestly wide.
+
+\subsection{Wilcoxon signed-rank}
+A two-sided nonparametric test on $\{d_t\}$ with $H_0$: median $=0$, checking
+whether the sign of the per-track advantage is consistent beyond chance without a
+normality assumption. Applied to the single headline pair only; no $p$-values on
+the $5$-track windows.
+
+\subsection{Why three seeds}
+Three is the minimum for an honest std; gate G2 pre-commits to adding seeds
+$3$--$4$ only to the two closest arms if $\sigma_{\mathrm{seed}}$ swamps the
+between-arm spread.
+
+\end{document}
