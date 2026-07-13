@@ -8,16 +8,20 @@ Schema (exact column order)::
 
     run_id, arm, seed, budget, config_hash, git_commit, gpu, wall_clock_h,
     steps_done, best_val_sisdr, final_val_sisdr, sisdr_skip_rate, checkpoint_path,
-    aug_remix, aug_gain, aug_flip, n_songs, base_width
+    aug_remix, aug_gain, aug_flip, n_songs, base_width,
+    domain, recipe, rank, lr, trainable_params, trainable_share, peak_vram_gb
 
 The ``aug_*``/``n_songs`` block is the Direction-02 addition (MASTER_PLAN §6). The
-final ``base_width`` is the Direction-03 addition (§5, §9): the chosen tower/decoder
-base width ``c`` recorded per run (the ``arm`` column — pre-existing — carries the
-band-split arm id ``split_mel``/``split_uniform``, or the loss id for the shared
-baseline cell). Every new column is **appended** so the schema stays
-backward-compatible: an older registry (without them) reads back NaN-filled, and
-runs that predate a column populate it with the identity default (the full recipe
-on 86 songs; ``base_width`` = 32, the baseline width).
+``base_width`` is the Direction-03 addition (§5, §9): the chosen tower/decoder base
+width ``c`` recorded per run. The final seven columns (``domain`` … ``peak_vram_gb``)
+are the **Direction-05** addition (D05 MASTER_PLAN §5): the domain (``t1_aac64`` /
+``t2_noise12db`` / ``standard``), the PEFT recipe (``zeroshot``/``head``/``lora4``/
+``lora16``/``full``), the LoRA rank, the (probe-frozen) learning rate, and the trained
+parameter count / share / peak VRAM per run. Every new column is **appended** so the
+schema stays backward-compatible: an older registry (without them) reads back
+NaN-filled, and runs that predate a column populate it with the identity default (the
+full recipe on 86 songs; ``base_width`` = 32; the D05 fields default empty/NaN for the
+Directions 01-03 rows, which are not PEFT runs).
 """
 
 from __future__ import annotations
@@ -48,6 +52,14 @@ REGISTRY_COLUMNS: tuple[str, ...] = (
     "aug_flip",
     "n_songs",
     "base_width",
+    # Direction-05 (PEFT / LoRA fine-tuning) additions — appended block, §5.
+    "domain",
+    "recipe",
+    "rank",
+    "lr",
+    "trainable_params",
+    "trainable_share",
+    "peak_vram_gb",
 )
 
 
@@ -75,6 +87,14 @@ class RunRecord:
     n_songs: int = 86
     # Direction-03 addition (default = the baseline SingNet-C1 width).
     base_width: int = 32
+    # Direction-05 additions (PEFT run metadata; defaults = "not a PEFT run").
+    domain: str = ""
+    recipe: str = ""
+    rank: int = 0
+    lr: float = float("nan")
+    trainable_params: int = 0
+    trainable_share: float = float("nan")
+    peak_vram_gb: float = float("nan")
 
     def as_row(self) -> dict[str, Any]:
         return {f.name: getattr(self, f.name) for f in fields(self)}

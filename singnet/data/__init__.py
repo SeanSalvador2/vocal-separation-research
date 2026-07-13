@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from .augment import STREAM_IDS, AugmentPipeline, random_gain, random_sign_flip, remix
+from .augment import (
+    STREAM_IDS,
+    AugmentPipeline,
+    random_channel_swap,
+    random_gain,
+    random_sign_flip,
+    remix,
+)
 from .manifest import Manifest, TestRowError, load_manifest
 from .musdb_dataset import (
     DEFAULT_CHUNK_S,
@@ -20,6 +27,7 @@ __all__ = [
     "STREAM_IDS",
     "random_gain",
     "random_sign_flip",
+    "random_channel_swap",
     "remix",
     "Manifest",
     "TestRowError",
