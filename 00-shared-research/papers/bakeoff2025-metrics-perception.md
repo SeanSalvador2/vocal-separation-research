@@ -28,4 +28,3 @@ Per-stem, per-system human ratings vs objective scores; rank correlation (Kendal
 ## 6. Verification notes
 - Title/authors/venue/arXiv ID: CONFIRMED (WebSearch: arXiv 2507.06917 abs, dblp WASPAA 2025 listing).
 - Findings (SDR best for vocals; SI-SAR better for drums/bass; FAD Kendall $\tau$ 0.25/0.19; embeddings not positively correlated for vocals; stem-specific recommendation): CONFIRMED via WebSearch summary of the abstract/paper. These match RESEARCH_NOTES §6 and RESEARCH_DIRECTIONS §1.4 exactly. Authorship (Jaffe & Burgoyne) newly pinned — our docs did not name authors.
-</content>

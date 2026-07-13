@@ -241,5 +241,3 @@ grounds a candidate direction is in `RESEARCH_DIRECTIONS.md`):
   activations + composite loss.
 - **Separated vocals improve Whisper lyrics transcription** (arXiv 2506.15514) — a
   downstream-utility evaluation axis for separators.
-</content>
-</invoke>

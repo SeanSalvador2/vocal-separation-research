@@ -60,5 +60,3 @@ SiSEC 2018 shipped reference implementations of three oracle separators over MUS
 - Track counts, splits, formats, sizes, license text, HQ access-restriction: CONFIRMED via Zenodo 1117372/3338373 and WebSearch (SigSep site).
 - 14-track valid list: CONFIRMED verbatim from sigsep-mus-db `mus.yaml`.
 - AAC "~16 kHz effective bandwidth": property of 256 kbps AAC; consistent with SiSEC/community reports — [not independently re-measured here].
-</content>
-</invoke>

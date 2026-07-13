@@ -25,4 +25,3 @@ Takes BSRNN's band-split front-end and replaces the RNN sequence modeling with *
 
 ## 6. Verification notes
 - Title/authors/arXiv ID + all numbers (SDX'23 1st with 500 extra; 9.80 dB avg SDR no extra data; RoPE; hierarchical transformers; band-split of complex spectrogram): CONFIRMED verbatim from HF abstract. RESEARCH_DIRECTIONS "Lu et al." correct (Wei-Tsung Lu first author).
-</content>

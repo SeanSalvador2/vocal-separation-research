@@ -24,4 +24,3 @@ Can a separator pretrained on **music** be transferred to a *different* separati
 
 ## 6. Verification notes
 - Title/authors/arXiv ID + method (UMX/Spleeter/Conv-TasNet, pretrained-vs-fine-tuned, SI-SIRi/SI-SDRi/2f-model + listening test, dialog separation): CONFIRMED (WebSearch). "Full fine-tuning, not PEFT" is explicit in the method description — the key scoping fact for Direction 05's novelty.
-</content>

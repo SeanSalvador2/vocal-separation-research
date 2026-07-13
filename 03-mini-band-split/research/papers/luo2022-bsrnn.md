@@ -41,4 +41,3 @@ BSRNN adds a semi-supervised stage using **unlabeled songs** (WebSearch-confirme
 - Semi-supervised mechanism (model-as-own-activity-detector + pseudo-label generator, keep active segments): CONFIRMED (WebSearch).
 - **Vocals 10.01 dB cSDR: CONFIRMED via DTTNet cross-ref, not BSRNN's own abstract** — flagged.
 - Exact band scheme and loss weighting: `[training knowledge]` — architecture structure confirmed, numeric band edges/loss coefficients not read from source.
-</content>

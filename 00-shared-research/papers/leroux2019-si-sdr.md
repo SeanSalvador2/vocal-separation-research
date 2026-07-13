@@ -42,4 +42,3 @@ No large benchmark; the contribution is definitional + counterexamples showing B
 - Title/authors/venue/arXiv ID: CONFIRMED (HF paper_search + WebSearch).
 - SI-SDR formula and scale-invariance: standard, matches the paper's definition; the projection form is reproduced from the paper's equations [core equations CONFIRMED against abstract's claim of a "slightly modified definition… simpler, more robust measure"; algebraic detail is textbook].
 - Zero-signal pathologies: derived from the formula (division by $\lVert s\rVert^2$); consistent with the paper's "critical failure" framing and with museval's silent-frame handling (independently verified in code).
-</content>

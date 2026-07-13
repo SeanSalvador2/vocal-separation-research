@@ -25,4 +25,3 @@ BS-RoFormer's band-split is **empirically designed, non-overlapping, heuristic**
 
 ## 6. Verification notes
 - Title/authors/arXiv ID + claim (overlapped mel bands vs non-overlapping heuristic; beats BS-RoFormer on vocals/drums/other on MUSDB18-HQ): CONFIRMED verbatim from HF abstract. RESEARCH_DIRECTIONS "Wang et al." correct (Ju-Chiang Wang first author).
-</content>

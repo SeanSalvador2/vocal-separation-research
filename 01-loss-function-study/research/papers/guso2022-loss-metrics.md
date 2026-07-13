@@ -43,4 +43,3 @@ Notation: mixture $x$, target source $s$, estimate $\hat s$; STFT $X,S,\hat S$ (
 - Title/authors/venue/arXiv ID: CONFIRMED (WebSearch).
 - Scope (controlled loss benchmark; losses-as-metrics; SDR misleading; phase-sensitive/spectrogram losses considered): CONFIRMED (abstract via WebSearch).
 - **Specific recommended loss names + rankings: `[UNVERIFIED]`** — paper body unreadable via every working route; do not assert the exact winning loss without a primary read. This is the one Direction-01 fact that a future full-text read should close.
-</content>

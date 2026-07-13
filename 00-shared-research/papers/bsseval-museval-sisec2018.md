@@ -50,4 +50,3 @@ SiSEC 2018 shipped reference implementations of **IBM, IRM, and MWF** oracles on
 - SiSEC 2018 (MUSDB18 introduction, Python BSSEval, 3 oracle masks): CONFIRMED via WebSearch of 1804.06267.
 - **Silent-frame `NaN` behavior: CONFIRMED directly from museval `metrics.py` source** (quoted logic above) — the single most important verified fact for Direction 08.
 - 1 s window / median-of-frames/median-of-tracks aggregation: standard museval convention [CONFIRMED as museval default; exact window length is the toolbox default].
-</content>

@@ -22,4 +22,3 @@ MSS progress is driven by challenges (MDX/SDX) but scattered across papers with 
 
 ## 6. Verification notes
 - Title/authors/date/arXiv ID + scope (two benchmarks, mvsep leaderboard, ensembling, top SDX'23 results): CONFIRMED verbatim from HF paper_search abstract.
-</content>

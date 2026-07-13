@@ -31,4 +31,3 @@ Deezer released Spleeter as an open, fast, pretrained separator. It is the refer
 ## 6. Verification notes
 - JOSS DOI, U-Net 6+6, L1 magnitude loss, 25k excerpts, 100× RT: CONFIRMED (WebSearch of JOSS/Deezer-research + repo README).
 - "6.6 dB not in the paper": CONFIRMED by reading the README (links out to a wiki; no in-README SDR table). RESEARCH_NOTES' "~6.6 dB vocals SDR (SiSEC/MUSDB18)" is retained but should be attributed to the wiki/third-party eval, not the JOSS paper — flagged here rather than edited (the number itself is not asserted to be from the paper in our docs).
-</content>

@@ -38,4 +38,3 @@ So the estimated **phase** is the mixture phase $\angle X$ *rotated* by a learne
 ## 6. Verification notes
 - Title/authors/ISMIR-2021/arXiv ID and all numbers (22% bins IRM>1, 7.24→8.98 dB vocals, 143 layers, cIRM): CONFIRMED verbatim from HF paper_search abstract.
 - The cIRM decoupling equations ($M_{\text{cIRM}}=S\bar X/|X|^2$; $\hat S=|M||X|e^{i(\angle X+\angle M)}$): standard complex-mask algebra, consistent with the abstract's description of decoupling magnitude/phase estimation [equations reproduced from method knowledge; abstract confirms the decoupling and the >1 allowance].
-</content>

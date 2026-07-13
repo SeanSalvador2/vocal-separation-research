@@ -27,4 +27,3 @@ Semi-supervised use: mix labeled synthetic data (with PIT) and unlabeled real da
 ## 6. Verification notes
 - Title/authors/venue/arXiv ID + scope (unsupervised, mixture-of-mixtures, semi-supervised adaptation, speech/universal): CONFIRMED (HF abstract).
 - MixIT objective + constraint on $A$: standard formulation consistent with the abstract's "separate… such that separated sources can be remixed to approximate the original mixtures" [equation reproduced from method knowledge; abstract confirms the mechanism].
-</content>

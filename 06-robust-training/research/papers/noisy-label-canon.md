@@ -38,4 +38,3 @@ Canon A–D is from **classification** (discrete label noise). Direction 06's ta
 - All four classic IDs (1706.05394, 1810.11874, 1804.06872, 1805.07836) + venues + methods: CONFIRMED (WebSearch: arXiv abs + PMLR/NeurIPS proceedings).
 - MSS-specific (2306.09382, 2307.12576 CONFIRMED via HF; 2510.15409, 2602.00084 via WebSearch gap-checks).
 - ITLM/Co-teaching/GCE equations reproduced from the standard formulations; abstracts/summaries confirm the mechanisms.
-</content>

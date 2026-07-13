@@ -38,4 +38,3 @@ numbers + metric convention) → Limitations → Relevance to this project → V
 **Metric hygiene throughout:** museval BSS-Eval SDR ≠ MDX cSDR/uSDR ≠ StemCraft window SI-SDR
 (RESEARCH_NOTES §0). Every number carries its provenance; `[UNVERIFIED]` marks anything not
 groundable via a working route.
-</content>

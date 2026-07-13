@@ -48,4 +48,3 @@ with $\mathcal L_{\text{sc}}=\lVert|S|-|\hat S|\rVert_F/\lVert|S|\rVert_F$, $\ma
 - **MR-STFT may not move SDR** (Bake-Off says SDR already tracks vocal perception) — so pre-register that the MR-STFT claim is judged on the *listening check at equal SDR*, not on SDR, to avoid a false "no effect" conclusion.
 - **Gusó's specific ranking is `[UNVERIFIED]`** — do not state "Gusó found loss X best" in the report without a primary read; cite only the verified scope (SDR can mislead; spectrogram losses competitive).
 - **Confound control:** identical architecture/data/optimizer/seeds across the 5 losses is essential (this is the whole point); only the loss and, where required, the presence of a differentiable iSTFT path may change.
-</content>

@@ -26,4 +26,3 @@ MixIT (`wisdom2020-mixit.md`) was assumed unsuitable for MSS because its mixture
 ## 6. Verification notes
 - Title/authors/date/arXiv ID + method (FMA MixIT pre-train → MUSDB fine-tune, band-split TF-Locoformer, improves over scratch): CONFIRMED verbatim from HF paper_search abstract.
 - No fabricated dB numbers — the abstract reports a qualitative improvement only; recorded as such.
-</content>

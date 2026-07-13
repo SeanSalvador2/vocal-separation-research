@@ -41,4 +41,3 @@ Direction 05 tests LoRA (rank 4 and 16) against zero-shot, head-only, and full f
 ## 6. Verification notes
 - Title/authors/venue/arXiv ID + core claims (freeze $W_0$; $\Delta W=BA$; 10,000×/3× vs GPT-3; on-par/better): CONFIRMED (WebSearch: arXiv 2106.09685 abs + HF paper page).
 - The $h=W_0x+\frac{\alpha}{r}BAx$ form, $A\sim\mathcal N$/$B=0$ init, $r(d+k)$ count, merge-for-zero-latency: standard LoRA formulation, matches the paper [equations reproduced from the well-known method; abstract/summary confirm the low-rank $\Delta W=BA$ mechanism and parameter savings].
-</content>

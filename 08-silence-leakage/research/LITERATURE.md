@@ -14,7 +14,7 @@ training-code behavior, and the leakage-metric draft). Shared metric notes linke
 |---|---|---|---|---|
 | museval `metrics.py` | **infrastructure** | silent frames → `NaN`, dropped from SDR | CONFIRMED (code) | [shared](../../00-shared-research/papers/bsseval-museval-sisec2018.md) |
 | Le Roux 2019 (1811.02508) | **infrastructure** | SI-SDR singular on silent target | CONFIRMED | [shared](../../00-shared-research/papers/leroux2019-si-sdr.md) |
-| Open-Unmix `data.py` | **baseline (control)** | uniform random-start chunking, no activity filter | CONFIRMED (code) | [papers/silence-metrics-grounding.md](papers/silence-metrics-grounding.md#2) |
+| Open-Unmix `data.py` | **baseline (control)** | uniform random-start chunking, no activity filter | CONFIRMED (code) | [papers/silence-metrics-grounding.md](papers/silence-metrics-grounding.md) |
 | BSRNN (2209.15174) | **context** | source-activity detector (for pseudo-labels, not sampling) | CONFIRMED | [Dir 03](../../03-mini-band-split/research/papers/luo2022-bsrnn.md) |
 | Demucs (1911.13254) | **context** | chunk-drop p=0.1 simulates silence | CONFIRMED (aug) | [shared](../../00-shared-research/papers/demucs2019-v1.md) |
 | BSMamba2 "Mamba2 Meets Silence" (2508.14556) | **recent related** | sparse-vocal robustness via Mamba2 (11.03 dB cSDR) | CONFIRMED (WS) | §4 |
@@ -33,7 +33,7 @@ RESEARCH_DIRECTIONS #8 states "**no paper reports a controlled chunk-sampling-po
 **What remains genuinely novel:** (i) the **custom silence-leakage metric (SLR)** — no source defines a silence-leakage/precision metric; the field either ignores silent frames (museval `NaN`) or notes SDR's silence-sensitivity without a dedicated measure; (ii) the **explicit quality-vs-leakage two-axis tradeoff** across 4 policies for a compact model; (iii) the **karaoke-product framing**. **Recommendation to orchestrator:** soften the "nobody reports a chunk-sampling ablation" claim to "**the silence problem in MSS is studied via architecture (BSMamba2) and content-forcing, but no one defines a silence-leakage metric or runs the policy-vs-leakage tradeoff**." The metric is the defensible novelty, not the sampling ablation alone.
 
 ## 5. Direction-specific technical notes (the metric + policies — for MASTER_PLAN)
-**Silence-leakage metric (SLR), OUR construction** — full formal draft with edge cases (thresholds, $\epsilon$, $L_{\min}$, empty-region `NaN`) is in [`papers/silence-metrics-grounding.md §3`](papers/silence-metrics-grounding.md#3):
+**Silence-leakage metric (SLR), OUR construction** — full formal draft with edge cases (thresholds, $\epsilon$, $L_{\min}$, empty-region `NaN`) is in [`papers/silence-metrics-grounding.md §3`](papers/silence-metrics-grounding.md):
 $$\text{SLR}=10\log_{10}\frac{\sum_{t\in R_{\text{sil}}}\hat v(t)^2+\epsilon}{\sum_{t\in R_{\text{sil}}}x(t)^2+\epsilon},\quad R_{\text{sil}}=\{\text{GT-vocal-silent frames, }\ge L_{\min}=0.5\text{ s, }{-60}\text{ dB threshold}\}.$$
 Primary threshold $-60$ dB (report $\{-50,-60,-70\}$); $\epsilon\!\sim\!10^{-8}$; empty $R_{\text{sil}}\to$`NaN`, excluded (mirrors museval).
 
@@ -51,4 +51,3 @@ Report each on **(overall vocals SI-SDR, museval SDR, SLR)**; the headline figur
 - **Energy-weighted must keep silent-chunk mass nonzero** — fully starving the model of silence is the `drop-silent` arm; the `energy-weighted` arm must *down-weight*, not exclude, or (a) and (b) collapse.
 - **Test-set silent-region identification is itself a small pipeline** — needs unit tests (GT-based, deterministic); a buggy $R_{\text{sil}}$ invalidates SLR.
 - **SLR excludes empty-region tracks** — report the valid-$n$; some MUSDB tracks may have near-continuous vocals.
-</content>

@@ -41,4 +41,3 @@ Pitch/tempo shift is a **separate, heavier** augmentation (applied at data-loadi
 - Second arXiv ID 1909.01174: CONFIRMED (WebSearch).
 - Augmentation classes/defaults: CONFIRMED from `augment.py` source.
 - L1 training loss: CONFIRMED (WebSearch + known). **L1-vs-L2 ablation: CONFIRMED (WebSearch).** **L1-vs-SI-SNR as a clean ablation: NOT confirmed — [PARTIALLY VERIFIED], indirect via Conv-TasNet; paper body unreadable via available routes.** This is the single flagged nuance in the shared library.
-</content>

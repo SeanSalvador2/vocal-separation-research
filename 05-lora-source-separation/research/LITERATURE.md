@@ -55,4 +55,3 @@ So **both rank-4 and rank-16 sit under the <5% budget** the hypothesis targets (
 - **Domain shift may be too small** — AAC-vs-HQ is a mild shift; if zero-shot `umxhq` already transfers, all recipes converge and the forgetting story is muted. Have the **genre-subset** shift as the stronger stress test.
 - **"<5% params" depends on `nb_bins`** — the table assumes 16 kHz bandwidth; recompute for the actual `umxhq` config. The *conclusion* (rank 4/16 both <5%) is robust to reasonable `nb_bins`.
 - **Novelty framing discipline** — cite PETL-for-music (tagging) and transfer-dialog (full-FT) so the claim is "first LoRA-for-MSS," accurately bounded.
-</content>

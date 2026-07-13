@@ -27,4 +27,3 @@ Demucs v1 was pure-waveform. Hybrid Demucs adds a **parallel spectrogram branch*
 ## 6. Verification notes
 - Both titles/authors/venues/arXiv IDs and all quoted numbers (MDX'21 win, +1.4 dB, 2.83/2.36, "performs poorly when trained only on MUSDB," 0.45 dB / 800 songs, 9.20 dB): CONFIRMED from HF paper_search abstracts.
 - `htdemucs_6s` as StemCraft's shipped engine and its +9.55 dB window SI-SDR: from StemCraft's own `REAL_RESULTS.md` (project-internal, not re-verified here).
-</content>

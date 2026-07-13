@@ -50,4 +50,3 @@ The whole experiment stands or falls on **honest parameter matching**. Method:
 - **Param-matching is the credibility crux** — if the three configs aren't truly matched, any SI-SDR gap is a capacity artifact. Verify counts programmatically and publish the per-module table.
 - **Implementation/test burden** — a new band-split encoder module needs unit tests (round-trip, correct band routing/merge); budget for it (Medium difficulty).
 - **Confound with mask/loss/STFT** — hold STFT settings, mask type, loss, optimizer, and the 14-track valid protocol fixed across all three; only the front-end changes.
-</content>

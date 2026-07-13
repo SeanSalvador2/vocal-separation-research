@@ -25,4 +25,3 @@ Three PETL families evaluated on frozen music foundation models: **adapter-based
 ## 6. Verification notes
 - arXiv ID + method (adapter/prompt/LoRA on music foundation models) + numbers (0.36%/0.22% params, 3×/2.5× speedup, MTG-Jamendo): CONFIRMED (WebSearch of abs + html).
 - **Exact title** ("…Transfer Learning…") pinned; RESEARCH_NOTES/DIRECTIONS paraphrase noted (not a wrong citation — arXiv ID is correct).
-</content>

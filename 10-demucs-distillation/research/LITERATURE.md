@@ -47,4 +47,3 @@ Deep-dives: [`papers/hinton2015-kd.md`](papers/hinton2015-kd.md),
 - **License discipline:** FMA audio licenses vary per track (`fma-dataset.md §3`) — filter to permissive licenses; commit no audio, only soft targets/weights.
 - **Scope creep (High difficulty):** new dataset + teacher inference pipeline + FMA hygiene is the heaviest option; budget accordingly (the base plan flags this).
 - **KD-is-classification caveat:** the "temperature" story is an analogy, not Hinton's mechanism — frame it honestly in THEORY/REPORT; the real transfer is the teacher's continuous output as a target.
-</content>

@@ -23,4 +23,3 @@ MSS trends toward ever-larger models. DTTNet asks whether a **carefully designed
 
 ## 6. Verification notes
 - Title/authors/arXiv ID + numbers (10.12 dB vocals cSDR; 10.01 dB BSRNN; 86.7% fewer params): CONFIRMED verbatim from HF abstract.
-</content>

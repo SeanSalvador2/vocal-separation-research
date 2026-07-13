@@ -33,4 +33,3 @@ leaving the **mixture $x=v+a$ unchanged** (only the *target* is corrupted). This
 - Title/authors(Fabbro, Uhlich +24)/TISMIR 7(1):63–84/arXiv ID: CONFIRMED (WebSearch).
 - Robust-MSS framing + **LabelNoise/Bleeding** names + construction (203 MoisesDB songs; bleeding = cross-stem partial content per song; label-noise = wrong groupings) + **>+1.6 dB over MDX'21 winner**: CONFIRMED (WebSearch). Matches RESEARCH_NOTES §6 / RESEARCH_DIRECTIONS §1.3.
 - ε-bleed model $\tilde v=v+\varepsilon a$: **OUR construction** (a controlled simplification of SDXDB23_Bleeding), clearly marked as such.
-</content>

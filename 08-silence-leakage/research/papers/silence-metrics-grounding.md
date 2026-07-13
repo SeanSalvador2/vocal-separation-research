@@ -45,4 +45,3 @@ $$\boxed{\ \text{SLR} \;=\; 10\log_{10}\frac{\sum_{t\in R_{\text{sil}}}\hat v(t)
 - museval `NaN`-on-silence: CONFIRMED from code. SI-SDR singularity: derived (CONFIRMED formula). UMX uniform sampling / no activity filter: CONFIRMED from `data.py`. Demucs chunk-drop p=0.1: gap-check (WebSearch). BSRNN activity detector: CONFIRMED (WebSearch/HF).
 - **SLR metric: OUR construction** — clearly marked; thresholds/eps/$L_{\min}$ are proposed defaults to pre-register, not published values.
 - Spleeter training-sampler detail: `[repo structure + training knowledge]` — full training pipeline not published.
-</content>

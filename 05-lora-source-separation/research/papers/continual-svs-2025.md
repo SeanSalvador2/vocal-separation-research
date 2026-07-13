@@ -25,4 +25,3 @@ Deployed separators meet songs whose genre/instrumentation differ from training.
 
 ## 6. Verification notes
 - arXiv ID + title + scope (U-Net mask, human marks false positives, continual, generalizes to unseen songs): CONFIRMED (WebSearch of abs/html). The mismatched "2021 symposium" venue string is explicitly **not** trusted (see date note).
-</content>

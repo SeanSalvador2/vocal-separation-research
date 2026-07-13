@@ -23,4 +23,3 @@ Good MSS at low complexity is hard in super-wide-band audio; prior work either i
 
 ## 6. Verification notes
 - Title/authors/arXiv ID + numbers (9.0 dB MUSDB18-HQ no extra data; 48% of HT-Demucs CPU): CONFIRMED verbatim from HF abstract. **ICASSP 2024 venue CONFIRMED** (WebSearch: cmsworkshops ICASSP2024, pp. 1276–1280).
-</content>

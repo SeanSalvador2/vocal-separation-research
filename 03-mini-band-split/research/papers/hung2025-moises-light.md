@@ -29,4 +29,3 @@ Built on the **TFC-TDF V3 / DTTNet lineage** (Dual-path TFC-TDF U-Net — see `c
 - **13× fewer than BS-RoFormer AND ~half of SCNet: CONFIRMED** (WebSearch) — both match RESEARCH_DIRECTIONS.
 - **"built on DTTNet": CONFIRMED** as building on the TFC-TDF V3 / DTTNet family (WebSearch architecture description), with the dual-path RNN→RoPE-transformer swap.
 - Architecture specifics ($N_{\text{band}}$ groups, $G$ 48→56, $N_{\text{split}}$ 3/1, decoder ÷3, 3 subbands): CONFIRMED via WebSearch of the paper; exact block diagrams not read from the (blocked) PDF.
-</content>

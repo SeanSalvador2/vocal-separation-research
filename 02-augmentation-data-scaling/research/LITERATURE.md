@@ -50,4 +50,3 @@ the shared Demucs/UMX notes (code-verified) and are tabled below.
 - **Small-N subsampling noise:** the {21,43,64,86} curve is sensitive to *which* songs are dropped; fix the subsample seed and draw endpoint noise bands so readers see signal vs noise.
 - **Confound with capacity:** at 21 songs a large model overfits; hold architecture/regularization fixed across N so the curve isolates data, not capacity (ties to Direction 03's param-matching discipline).
 - **Adjacent-prior honesty:** cite 1906.02618 so the contribution is framed as "factorized + scaling at compact scale," not "first study of MSS training data."
-</content>

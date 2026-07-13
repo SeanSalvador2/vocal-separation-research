@@ -13,13 +13,13 @@ Deep-dives: [`papers/fabbro2023-sdx23.md`](papers/fabbro2023-sdx23.md) (CORE),
 | Paper | Role | Specific claim we rely on | Verified | Deep-dive |
 |---|---|---|---|---|
 | SDX'23 (2308.06979) | **replicate (concept)** | robust-MSS task; Bleeding = cross-stem partial content; +1.6 dB over MDX'21 | CONFIRMED | [papers/fabbro2023-sdx23.md](papers/fabbro2023-sdx23.md) |
-| ITLM (1810.11874) | **method (mitigation)** | iteratively train on lowest-loss subset; provable recovery | CONFIRMED | [papers/noisy-label-canon.md](papers/noisy-label-canon.md#b) |
-| Co-teaching (1804.06872) | **method (mitigation)** | small-loss selection is noise-robust | CONFIRMED | [noisy-label-canon.md](papers/noisy-label-canon.md#c) |
-| GCE (1805.07836) | **method (alt)** | robust loss between CCE and MAE | CONFIRMED | [noisy-label-canon.md](papers/noisy-label-canon.md#d) |
-| Arpit 2017 (1706.05394) | **foundation** | DNNs learn clean patterns before memorizing noise | CONFIRMED | [noisy-label-canon.md](papers/noisy-label-canon.md#a) |
-| TFC-TDF-UNet v3 (2306.09382) | **precedent (MSS)** | SDX'23-winning loss-masking for noise-robust MSS | CONFIRMED | [noisy-label-canon.md](papers/noisy-label-canon.md#e) |
-| Self-refining labels (2307.12576) | **context (MSS)** | label refinement recovers clean-label quality | CONFIRMED | [noisy-label-canon.md](papers/noisy-label-canon.md#e) |
-| Blind data cleaning (2510.15409) | **recent related** | data cleaning for MSS (2025) | title/existence (WS) | [noisy-label-canon.md](papers/noisy-label-canon.md#e) |
+| ITLM (1810.11874) | **method (mitigation)** | iteratively train on lowest-loss subset; provable recovery | CONFIRMED | [papers/noisy-label-canon.md](papers/noisy-label-canon.md) |
+| Co-teaching (1804.06872) | **method (mitigation)** | small-loss selection is noise-robust | CONFIRMED | [noisy-label-canon.md](papers/noisy-label-canon.md) |
+| GCE (1805.07836) | **method (alt)** | robust loss between CCE and MAE | CONFIRMED | [noisy-label-canon.md](papers/noisy-label-canon.md) |
+| Arpit 2017 (1706.05394) | **foundation** | DNNs learn clean patterns before memorizing noise | CONFIRMED | [noisy-label-canon.md](papers/noisy-label-canon.md) |
+| TFC-TDF-UNet v3 (2306.09382) | **precedent (MSS)** | SDX'23-winning loss-masking for noise-robust MSS | CONFIRMED | [noisy-label-canon.md](papers/noisy-label-canon.md) |
+| Self-refining labels (2307.12576) | **context (MSS)** | label refinement recovers clean-label quality | CONFIRMED | [noisy-label-canon.md](papers/noisy-label-canon.md) |
+| Blind data cleaning (2510.15409) | **recent related** | data cleaning for MSS (2025) | title/existence (WS) | [noisy-label-canon.md](papers/noisy-label-canon.md) |
 | MUSDB18 | **infrastructure** | clean stems we corrupt | CONFIRMED | [shared](../../00-shared-research/papers/musdb18-dataset.md) |
 
 ## 3. Replicate-vs-extend
@@ -45,4 +45,3 @@ Chunks whose target carries large $\varepsilon a$ have persistently high loss (A
 - **Trimming can discard hard-but-clean chunks** (dense mixes, quiet vocals) — over-trimming hurts on clean data too; sweep $k$ and report the clean-data cost of trimming.
 - **Classification→regression transfer** — canon A–D is classification; the "high-loss = corrupted" premise is weaker for regression where legitimately hard chunks also have high loss. ITLM (general estimator) is the safest citation; frame results as an empirical test of the transfer.
 - **Small ε may be within noise** — ε=0.05 might not separate from ε=0 at this scale; the 3-seed endpoints and CIs are essential to claim a curve.
-</content>

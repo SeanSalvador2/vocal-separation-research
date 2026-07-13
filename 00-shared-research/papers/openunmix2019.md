@@ -49,4 +49,3 @@ License: **MIT** (`umx`/`umxhq` code+weights). These are the exact anchors in RE
 - Exact layer shapes (fc1/bn1/tanh → LSTM 256×2×3 → skip 1024 → fc2/bn2/relu → fc3/bn3 → output): CONFIRMED from `model.py` (quoted defaults `hidden_size=512`, `hidden_size//2` when bidirectional).
 - Augmentation functions and defaults (gain 0.25–1.25, channelswap p=0.5, random_track_mix): CONFIRMED from `data.py`.
 - LoRA param-count formula $r(d_{out}+d_{in})$: standard (see `hu2021-lora.md`); the specific UMX matrix dims are the code defaults.
-</content>

@@ -28,4 +28,3 @@ Since there is no softmax, the "soft target" is simply the **teacher's continuou
 ## 6. Verification notes
 - Title/authors/arXiv ID + temperature/dark-knowledge/$T\in[1,20]$/small-student-lower-T: CONFIRMED (WebSearch).
 - The softmax-temperature equations are the standard KD formulation; the **regression caveat and analogue are OUR framing** (clearly marked) — Hinton's method itself is classification-only.
-</content>

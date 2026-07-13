@@ -39,4 +39,3 @@ For Direction 10, a **~100–200 track curated subset** (from `fma_small`) is am
 - arXiv ID + authors + 106,574 tracks + 4 subset sizes: CONFIRMED (WebSearch + README).
 - **Licensing (metadata CC BY 4.0; audio per-artist-chosen license; "research purposes"): CONFIRMED verbatim from `mdeff/fma` README.** The per-track-license-varies nuance is the key correction to any "uniformly CC-BY" reading.
 - Per-track license field in `tracks.csv`: `[README states audio license is artist-chosen and metadata includes license info; exact column name from repo docs]`.
-</content>

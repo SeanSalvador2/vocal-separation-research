@@ -35,6 +35,29 @@ Jupyter notebooks covering the full DS lifecycle (scaffolded, not yet executed),
 reproducible `singnet/`-style code package, a draft paper/report with placeholders for
 results, and a `SEAN-README.md` explaining the direction in plain terms.
 
+## Research library (Phase 0)
+
+Verified source notes grounding every direction. Each paper deep-dive lives once (shared if
+multiple directions need it) and is cross-linked; every citation is logged claim-by-claim.
+
+- [`00-shared-research/`](00-shared-research/README.md) — shared library: dataset + metrics +
+  Spleeter/UMX/Demucs/cIRM deep-dives, plus the
+  [`VERIFICATION_LOG.md`](00-shared-research/VERIFICATION_LOG.md) (routes, verdicts, corrections,
+  gap-checks; all verified 2026-07-13).
+
+Per-direction literature guides (`research/LITERATURE.md` + `research/papers/`):
+
+- 01 — [`01-loss-function-study/research/LITERATURE.md`](01-loss-function-study/research/LITERATURE.md)
+- 02 — [`02-augmentation-data-scaling/research/LITERATURE.md`](02-augmentation-data-scaling/research/LITERATURE.md)
+- 03 — [`03-mini-band-split/research/LITERATURE.md`](03-mini-band-split/research/LITERATURE.md)
+- 05 — [`05-lora-source-separation/research/LITERATURE.md`](05-lora-source-separation/research/LITERATURE.md)
+- 06 — [`06-robust-training/research/LITERATURE.md`](06-robust-training/research/LITERATURE.md)
+- 08 — [`08-silence-leakage/research/LITERATURE.md`](08-silence-leakage/research/LITERATURE.md)
+- 10 — [`10-demucs-distillation/research/LITERATURE.md`](10-demucs-distillation/research/LITERATURE.md)
+
+Metric hygiene throughout: museval BSS-Eval SDR ≠ MDX cSDR/uSDR ≠ StemCraft window SI-SDR
+(`RESEARCH_NOTES.md §0`). `[UNVERIFIED]` marks anything not groundable via a working route.
+
 ## Related project
 
 The trained model(s) from this project are intended to ship into

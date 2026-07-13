@@ -43,4 +43,3 @@ auraloss/PWG defaults (verified): **`fft_sizes=[1024, 2048, 512]`, `hop_sizes=[1
 ## 6. Verification notes
 - PWG title/authors/venue/arXiv ID + MOS/param claims: CONFIRMED (HF paper_search abstract).
 - MR-STFT formulae + default resolutions: **CONFIRMED from `auraloss/freq.py` source** (spectral convergence = Frobenius ratio; log-mag L1; `fft_sizes=[1024,2048,512]`, `hop_sizes=[120,240,50]`, `win_lengths=[600,1200,240]`). These auraloss defaults follow the PWG paper's resolution set.
-</content>
