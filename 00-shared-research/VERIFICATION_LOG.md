@@ -85,6 +85,20 @@ _(01 loss-study, 02 aug/scaling, 03 band-split, 05 LoRA, 06 robust, 08 silence, 
 | 05-5 | UMX LoRA target shapes | fc1/fc2/fc3 + 3-layer BiLSTM weight_ih/hh; ~8.3 M total; r4≈1.2%, r16≈4.9% | GH (`model.py`) | **CONFIRMED** | Param budget computed from code shapes (nb_bins≈1487 assumed; verify programmatically). |
 | 05-GAP | Gap-check: PEFT/LoRA-for-MSS by mid-2026 | Does any published LoRA-for-MSS study exist? | WS | **NULL (open) — KEY** | Query 2026-07-13. LoRA in music = generation, beat-tracking (2503.10086), deepfake — **none for source separation**. Direction 05 novelty VERIFIED. Cross-cut: "Why LoRA Resists Label Noise" 2602.00084 (→ Dir 06). |
 
+### 06 — Robust training
+
+| # | Source / ID | Claim checked | Route | Verdict | Notes |
+|---|---|---|---|---|---|
+| 06-1 | SDX'23, **2308.06979**, TISMIR 2024 | robust-MSS; LabelNoise/Bleeding construction; +1.6 dB over MDX'21 | WS | **CONFIRMED** | Fabbro/Uhlich +24. Bleeding=cross-stem partial content per song (203 MoisesDB songs). |
+| 06-2 | ITLM, **1810.11874**, ICML 2019 | iterative trimmed loss = train on lowest-loss subset; provable recovery | WS | **CONFIRMED** | Shen & Sanghavi (PMLR v97:5739). arXiv ID confirmed. Direction 06's exact mitigation. |
+| 06-3 | Co-teaching, **1804.06872**, NeurIPS 2018 | small-loss selection, two nets | WS | **CONFIRMED** | Han et al. |
+| 06-4 | GCE, **1805.07836**, NeurIPS 2018 | robust loss between CCE and MAE | WS | **CONFIRMED** | Zhang & Sabuncu. |
+| 06-5 | Arpit, **1706.05394**, ICML 2017 | DNNs learn clean patterns before memorizing noise | WS | **CONFIRMED** | Grounds small-loss selection. |
+| 06-6 | TFC-TDF-UNet v3, **2306.09382** | SDX'23-winning loss-masking for noise-robust MSS | HF | **CONFIRMED** | Kim/Lee/Jung; MSS mitigation precedent. |
+| 06-7 | Self-refining labels, **2307.12576** | label refinement recovers clean-label MSS quality | HF | **CONFIRMED** | Koo et al.; addresses label noise (complementary to bleed). |
+| 06-8 | Blind data cleaning MSS, **2510.15409** | data cleaning for MSS (Oct 2025) | WS | **CONFIRMED (existence)** | Recent related work; must be cited (post-dates base plan). |
+| 06-9 | ε-bleed model $\tilde v=v+\varepsilon a$ | Is it faithful to SDX'23? | — | **OUR CONSTRUCTION** | Controlled simplification of SDXDB23_Bleeding; clearly marked as ours in `fabbro2023-sdx23.md`/LITERATURE. |
+
 ---
 
 ## Gap-check queries (logged per Step)
