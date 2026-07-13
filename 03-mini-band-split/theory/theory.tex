@@ -1,0 +1,212 @@
+\documentclass[11pt]{article}
+
+% Standalone mirror of ../THEORY.md. amsmath/amssymb only; no external figures,
+% no external packages, so it compiles with a bare LaTeX installation.
+% (Compile-untested in the build environment; written to compile with pdflatex.)
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\iSTFT}{\operatorname{iSTFT}}
+\newcommand{\mean}{\operatorname{mean}}
+\newcommand{\round}{\operatorname{round}}
+\newcommand{\val}{\overline{v}}
+
+\title{Theory Notes --- Direction 03:\\ A Mini Band-Split Front-End at Matched
+Parameters}
+\author{SingNet project}
+\date{Frozen 2026-07-13}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note derives the mathematics implemented in \code{singnet/} +
+\code{scripts/} for Direction 03: band-splitting as a change of weight-sharing
+scope; the HTK-mel band edges for our STFT pins; the boundary/receptive-field
+analysis behind a possible negative result; and --- the crux --- the exact
+parameter and compute accounting, giving the closed form $P(c)$, the solved width
+$c=23$ with a single bottleneck bump to $b_5=382$, the per-module tables that
+match \code{scripts/match\_params.py} and the unit tests, and the FLOPs derivation
+showing the variants are $\approx\!0.54\times$ the baseline's encoder compute at
+matched parameters (capacity $\ne$ compute). It closes with the per-band metrics
+and the three-arm ordered-chain statistics. Every number in \S4 is machine-checked
+against the built \code{nn.Module}.
+\end{abstract}
+
+\paragraph{Notation.} A mono mixture chunk has magnitude $|X|\in\mathbb
+R_{\ge0}^{F\times T}$ on $F=2048$ network bins, $T=256$ frames. A magnitude-mask
+U-Net predicts $M\in[0,1]^{F\times T}$; $\widehat V=M\odot|X|e^{i\angle X}$,
+$\hat v=\iSTFT(\widehat V)$. Direction 03 changes only the encoder front-end: one
+full-spectrum encoder (baseline \code{SingNetC1}) vs.\ $B=3$ per-band towers.
+
+\section{The band-split idea, formalized}
+
+A 2-D convolution is translation-equivariant along frequency: the baseline applies
+one filter bank $W$ to \emph{all} bins,
+$(\mathcal E_{\text{base}}x)[:,f,t]=\phi(W*x)[:,f,t]$ for every $f$
+(full-spectrum weight sharing). The band-split encoder partitions $[0,F)$ into
+contiguous bands $\mathcal B_b=[e_b,e_{b+1})$ and gives each its own operator,
+\[
+(\mathcal E_{\text{split}}x)[:,f,t]=\phi\big(W_b*x_{\mathcal B_b}\big)[:,f,t],
+\qquad f\in\mathcal B_b,
+\]
+band-local weight sharing: each band's statistics get dedicated capacity. We keep
+exactly the partition + per-band conv capacity and \emph{drop} the cross-band
+sequence model of BSRNN/Mel-RoFormer --- dropping it is what isolates the
+partition (otherwise a win could be the attention). The towers use the
+\emph{same} 5-level block design as the baseline, so the only change is the
+weight-sharing scope; no cross-band mixing occurs before the bottleneck.
+
+\section{Mel scale and band edges}
+
+The HTK mel scale is $m(f)=2595\log_{10}(1+f/700)$, inverse
+$f(m)=700(10^{m/2595}-1)$. An equal-mel partition of $[0,f_{\max}]$ into $B$ bands
+puts interior edges at $m_i=\tfrac iB m(f_{\max})$, mapped to Hz and then to the
+nearest bin $k(f)=\round(f\,n_{\text{fft}}/sr)$. For $sr=44100$,
+$n_{\text{fft}}=4096$ ($f_{\max}=22050$, $F=2048$),
+$m(f_{\max})=2595\log_{10}(32.5)=3923.34$, so $f_1=1533.9$\,Hz $\to k_1=142$ and
+$f_2=6428.9$\,Hz $\to k_2=597$:
+\[
+\text{mel: } [0,142,597,2048]\ (\approx1.53,6.43\,\text{kHz}),\qquad
+\text{uniform: } [0,683,1365,2048]\ (\approx7.35,14.70\,\text{kHz}).
+\]
+The mel layout concentrates two of three bands below $6.43$\,kHz, matching where
+vocal energy lives ($\sim100$\,Hz--$4$\,kHz). Caveat: MUSDB18 is AAC-limited to
+$\approx16$\,kHz, so the mel top band $[6.43,22.05]$\,kHz is partly dead spectrum
+--- a property of mel spacing on this data, stated in advance and NaN-guarded by
+the banded metrics.
+
+\section{Boundary analysis}
+
+Each band of width $w_b$ is zero-padded on its high-frequency side to
+$p_b=\lceil w_b/32\rceil\cdot32$ (so five stride-2 layers halve exactly). For both
+layouts the padded total is $P=\sum_b p_b=2112$ (mel $p=(160,480,1472)$, uniform
+$(704,704,704)$); $P$ is carried through the network and the final mask is cropped
+back to $2048$ bins by a fixed, exactly-invertible gather. A tower has the
+baseline receptive field ($r_\ell=5,13,29,61,125$ bins) but is \emph{confined to
+its band}: structure straddling an edge (e.g.\ a harmonic near the mel edge
+$k_1=142$) is split between two towers that cannot share it in the encoder,
+whereas the baseline sees it freely. This severing is the mechanism for a
+pre-registered \emph{refuted (negative)} outcome; cross-band information returns
+only in the shared decoder, and the per-band figure localizes damage at
+band-boundary-adjacent bands.
+
+\section{Parameter and compute accounting (the crux)}
+
+\paragraph{Spatial-size independence.} A conv/transpose-conv $(c_{\text{in}},
+c_{\text{out}},5\times5)$ has $25c_{\text{in}}c_{\text{out}}+c_{\text{out}}$
+parameters for \emph{any} spatial size; its BatchNorm adds $2c_{\text{out}}$. One
+conv+BN block costs $b(c_{\text{in}},c_{\text{out}})=25c_{\text{in}}c_{\text{out}}
++3c_{\text{out}}$. Consequently the mel and uniform variants --- differing only in
+band widths --- have the \emph{identical} parameter count.
+
+\paragraph{Closed form.} With base width $c$ and bottleneck $b_5$,
+\begin{align*}
+E(c,b_5)&=b(1,c)+b(c,2c)+b(2c,4c)+b(4c,8c)+b(8c,b_5)=1050c^2+70c+200c\,b_5+3b_5,\\
+D(c,b_5)&=b(b_5,8c)+b(16c,4c)+b(8c,2c)+b(4c,c)+b(2c,c)=2150c^2+48c+200c\,b_5,
+\end{align*}
+and the variant (three towers, one decoder, head $c+1$) is
+\[
+\boxed{\,P(c,b_5)=3E(c,b_5)+D(c,b_5)+(c+1)=5300c^2+259c+800c\,b_5+9b_5+1.\,}
+\]
+At $b_5=16c$ this is $P_{\text{pure}}(c)=18100c^2+403c+1$; the baseline (one
+encoder+decoder+head at $c=32$) is $9{,}835{,}745=P_0$.
+
+\paragraph{Width selection.} $P_{\text{pure}}(c)=P_0\Rightarrow c\approx23.31$.
+Neither pure integer width is within $2\%$: $P_{\text{pure}}(23)=9{,}584{,}170$
+($-2.558\%$), $P_{\text{pure}}(24)=10{,}435{,}273$ ($+6.095\%$). Rule: take the
+largest $c$ under budget ($c=23$), then the single positive bottleneck bump
+$b_5=16c+\Delta$ minimizing $|P-P_0|$. As $P$ is linear in $b_5$ with slope
+$800c+9=18409$,
+\[
+\Delta=\Big\lfloor\tfrac{251{,}575}{18409}\Big\rceil=14\Rightarrow b_5=382,\qquad
+P(23,382)=9{,}841{,}896\ (+0.0625\%).
+\]
+
+\paragraph{Per-module table (matches \code{match\_params.py} and the tests).}
+Encoder rows are the total across towers.
+\begin{center}
+\begin{tabular}{lrr}
+Module & baseline ($c{=}32$) & split\_mel / split\_uniform ($c{=}23,b_5{=}382$)\\\hline
+enc1 & 896 & 1{,}932\\
+enc2 & 51{,}392 & 79{,}764\\
+enc3 & 205{,}184 & 318{,}228\\
+enc4 & 819{,}968 & 1{,}271{,}256\\
+enc5 & 3{,}278{,}336 & 5{,}275{,}038\\
+dec1 & 3{,}277{,}568 & 1{,}757{,}752\\
+dec2 & 1{,}638{,}784 & 846{,}676\\
+dec3 & 409{,}792 & 211{,}738\\
+dec4 & 102{,}496 & 52{,}969\\
+dec5 & 51{,}296 & 26{,}519\\
+head & 33 & 24\\\hline
+encoder $\Sigma$ & 4{,}355{,}776 & 6{,}946{,}218\\
+decoder $\Sigma$ & 5{,}479{,}936 & 2{,}895{,}654\\
+\textbf{total} & \textbf{9{,}835{,}745} & \textbf{9{,}841{,}896}\\
+\end{tabular}
+\end{center}
+
+\paragraph{Compute: capacity $\ne$ compute.} A conv layer's MACs scale with output
+spatial size, $\text{MACs}_\ell\approx S_{\text{out},\ell}\cdot25c_{\text{in}}
+c_{\text{out}}$. The baseline encoder runs on $F=2048$; the variant runs three
+towers each on $\approx F/3$, and the $3\times$ count cancels the $1/3$ extent
+($\sum_b p_b/2^\ell=P/2^\ell$), so the variant encoder is like a \emph{single}
+width-$c$ encoder on the padded spectrum:
+\[
+\frac{\text{MACs}^{\text{enc}}_{\text{variant}}}{\text{MACs}^{\text{enc}}_{\text{base}}}
+\approx\Big(\tfrac{c}{32}\Big)^2\frac{P}{2048}
+=\Big(\tfrac{23}{32}\Big)^2\tfrac{2112}{2048}\approx0.53,
+\]
+and $=0.541$ exactly with $b_5=382$ (identical for both variants, as it depends
+only on $P$). Whole-model MACs $\approx0.54\times$ baseline. Thus at matched
+\emph{parameters} the variants are $\approx1.85\times$ cheaper in encoder compute
+--- an incidental bonus reported as a descriptive secondary, never the claim.
+Three towers hold $3\times$ the per-encoder parameters yet do $1\times$ the spatial
+work at a smaller width, hence half the compute.
+
+\section{Per-band mechanism metrics}
+
+For an analysis band $b=[\underline f,\overline f)$, band-limited SI-SDR zeros all
+bins outside $b$ in both signals' own STFTs, inverts, and scores SI-SDR ---
+well-defined (a common linear band mask, no phase asymmetry), NaN-guarded for empty
+or silent-reference bands. Band magnitude error is
+$\mean_{(k,t)\in b}||R|-|E||\,/\,\mean_{(k,t)\in b}|R|$, a relative L1 error,
+NaN when the reference band level is below $\varepsilon$. Analysis uses a fixed
+6-band grid --- the union of both variants' interior edges, a $100$\,Hz floor
+split and $[0,sr/2]$ --- so neither arm is scored on its own favorable grid; the
+mechanism figure plots per-band (variant $-$ baseline) deltas, expected to
+concentrate in the vocal-dense bands under a positive headline.
+
+\section{Statistics of the design}
+
+The three-arm noise band is
+$\sigma_{\text{seed}}=\sqrt{\tfrac13(s^2_{\text{base}}+s^2_{\text{uni}}
++s^2_{\text{mel}})}$. H-03 is the ordered chain $\val(\text{mel})>\val(\text{uni})
+>\val(\text{base})$, tested by $E_1=\val(\text{uni})-\val(\text{base})$ and
+$E_2=\val(\text{mel})-\val(\text{uni})$ against $\sigma_{\text{seed}}$. The two
+links are \emph{jointly} pre-registered as one ordered claim, so no
+multiple-comparison correction is applied; the honesty comes from enumerating the
+partial cells (E1-only, E2-only, refuted-null, refuted-negative) \emph{in
+advance}:
+\[
+\text{verdict}=\begin{cases}
+\text{fully supported}& E_1>\sigma\wedge E_2>\sigma,\\
+\text{partial }E_1& E_1>\sigma\wedge E_2\le\sigma,\\
+\text{partial }E_2& E_2>\sigma\wedge E_1\le\sigma,\\
+\text{refuted (negative)}& \text{neither},\ \val(\text{base})-\val(\text{uni})>\sigma\wedge\val(\text{base})-\val(\text{mel})>\sigma,\\
+\text{refuted (null)}& \text{neither, otherwise.}
+\end{cases}
+\]
+Matched seeds do not match init across arms (different shapes), so seed matching
+controls data order only; the 3-seed spread absorbs init variance. A FULL-budget
+pair (best variant + baseline) guards budget-dependence: if it reverses the
+REDUCED sign, the verdict downgrades to \emph{mixed (budget-dependent)}.
+
+\paragraph{Code.} \S1--3 \code{models/bandsplit\_unet.py}; \S4
+\code{scripts/match\_params.py} (asserted by \code{tests/test\_match\_params.py},
+\code{tests/test\_bandsplit\_model.py}); \S5 \code{eval/banded.py}; \S6
+\code{analysis/bandsplit.py}. Every \S4 number is machine-checked against the built
+model.
+
+\end{document}
