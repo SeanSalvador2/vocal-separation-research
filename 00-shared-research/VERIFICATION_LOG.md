@@ -53,6 +53,15 @@ _(01 loss-study, 02 aug/scaling, 03 band-split, 05 LoRA, 06 robust, 08 silence, 
 | 01-3 | `auraloss/freq.py` (MR-STFT impl) | $\mathcal L_{sc}=\lVert|S|-|\hat S|\rVert_F/\lVert|S|\rVert_F$; log-mag L1; `fft=[1024,2048,512]`, `hop=[120,240,50]`, `win=[600,1200,240]` | GH | **CONFIRMED** | Code-exact defaults. |
 | 01-4 | Demucs v1 loss claim (L1 > SI-SNR) | Attribution to 1911.13254 | WS + GH | **PARTIAL** | L1-vs-L2 ablation CONFIRMED; **clean L1-vs-SI-SNR ablation NOT in paper** (indirect via Conv-TasNet). Direction 01 leans on Gusó for the controlled claim; RESEARCH_DIRECTIONS not edited. |
 
+### 02 — Augmentation & data-scaling
+
+| # | Source / ID | Claim checked | Route | Verdict | Notes |
+|---|---|---|---|---|---|
+| 02-1 | MixIT, **2006.12701**, NeurIPS 2020 | Unsupervised mixture-invariant training; semi-supervised adaptation | HF | **CONFIRMED** | Wisdom/Tzinis/Erdogan/Weiss/Wilson/Hershey. Speech/universal, not MSS. |
+| 02-2 | MixIT-for-MSS, **2505.07631** | FMA MixIT pre-train → MUSDB fine-tune (band-split TF-Locoformer) beats scratch | HF | **CONFIRMED** | Saijo & Bando. No headline dB in abstract (qualitative "improves"); recorded as such. |
+| 02-3 | UMX/Demucs aug recipes | gain U(0.25,1.25), channelswap p=0.5, source remixing, sign flip, shift | GH (`data.py`,`augment.py`) | **CONFIRMED** | Code-exact; see shared notes. UMX gain is 0.25–1.25 (not "±3–6 dB" of RESEARCH_NOTES). |
+| 02-GAP | Gap-check: factorized aug ablation + scaling curve for compact MSS | Does it exist? | WS | **NULL (open)** | Query 2026-07-13. Transforms well-documented; Demucs discusses aug *impact*; **one adjacent prior "SVS: a study on training data" 1906.02618 (2019)**. No dedicated factorized+scaling study at compact scale → novelty stands; cite 1906.02618 as closest prior. |
+
 ---
 
 ## Gap-check queries (logged per Step)
