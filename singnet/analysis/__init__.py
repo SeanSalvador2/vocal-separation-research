@@ -8,6 +8,11 @@ between-seed noise σ_seed. See :mod:`singnet.analysis.scaling`.
 
 from __future__ import annotations
 
+from .bandsplit import (
+    OrderedChainVerdict,
+    ordered_chain_verdict,
+    three_arm_sigma,
+)
 from .scaling import (
     FitResult,
     fit_log2,
@@ -22,4 +27,7 @@ __all__ = [
     "loo_table",
     "pooled_seed_sigma",
     "secant_slopes",
+    "OrderedChainVerdict",
+    "ordered_chain_verdict",
+    "three_arm_sigma",
 ]

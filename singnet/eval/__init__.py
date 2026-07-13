@@ -1,7 +1,13 @@
-"""Evaluation: overlap-add inference, oracles/floor, and the frozen protocol."""
+"""Evaluation: overlap-add inference, oracles/floor, banded metrics, and the protocol."""
 
 from __future__ import annotations
 
+from .banded import (
+    analysis_grid_hz,
+    band_limited_sisdr,
+    band_mag_error,
+    banded_report,
+)
 from .evaluate import (
     TrackScores,
     evaluate,
@@ -21,6 +27,10 @@ from .overlap_add import (
 )
 
 __all__ = [
+    "analysis_grid_hz",
+    "band_limited_sisdr",
+    "band_mag_error",
+    "banded_report",
     "TrackScores",
     "evaluate",
     "oracle_ibm",
