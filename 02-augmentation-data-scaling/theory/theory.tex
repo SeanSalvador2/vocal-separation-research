@@ -1,0 +1,260 @@
+\documentclass[11pt]{article}
+
+% Standalone mirror of ../THEORY.md. amsmath/amssymb only; no external figures,
+% no external packages, so it compiles with a bare LaTeX installation.
+% (Compile-untested in the build environment; written to compile with pdflatex.)
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\STFT}{\operatorname{STFT}}
+\newcommand{\iSTFT}{\operatorname{iSTFT}}
+\newcommand{\mean}{\operatorname{mean}}
+\newcommand{\supp}{\operatorname{supp}}
+\newcommand{\val}{\operatorname{val}}
+\newcommand{\dequal}{\stackrel{d}{=}}
+
+\title{Theory Notes --- Direction 02:\\ Augmentation Factorization and Data
+Scaling for Compact Vocal Separation}
+\author{SingNet project}
+\date{Frozen 2026-07-13}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note derives the mathematics implemented in the \code{singnet/} package for
+Direction 02: remix as a product of source marginals and the mixture manifold it
+enlarges; the effective-sample-size combinatorics of remixing with honest bounds;
+gain and sign flip as group actions on a magnitude-masking model (with the exact
+proof that sign flip is the design's negative control); the identifiability of a
+four-point scaling fit and its parametric-bootstrap slope CI; and the statistics of
+the design (pooled $\sigma_{\text{seed}}$, the single pre-registered contrast, and
+the interaction gap). It mirrors \code{THEORY.md}; every result cites the
+implementing function, and all are exercised by the gate-G0 tests.
+\end{abstract}
+
+\paragraph{Notation.} A training example is a mono chunk pair $(v,a)$ with target
+vocals $v$ and accompaniment $a$ in $\mathbb R^{L}$ ($L=264{,}600$, $6$\,s at
+$44.1$\,kHz); the mixture is $x=v+a$. STFTs are $V,A,X$ with $X=V+A$ by linearity;
+magnitudes $|V|,|A|,|X|$. The network consumes a per-chunk-standardized
+$\log(1+|X|)$ and predicts a mask $M\in[0,1]^{F\times T}$, with vocal estimate
+$\widehat V=M\odot|X|\,e^{i\angle X}$ and $\hat v=\iSTFT(\widehat V)$. This direction
+fixes the loss to \code{l1mag}, $\mathcal L=\mean\big|\,M|X|-|V|\,\big|$.
+
+\section{Augmentation as distribution design}
+
+\subsection{Remix as a product of marginals}
+
+A real song $k$ emits a coupled pair $(v_k,a_k)\sim p_{\text{song}}$ sharing key,
+tempo and production. Write its marginals
+\[
+p_V(v)=\int p_{\text{song}}(v,a)\,da,\qquad
+p_A(a)=\int p_{\text{song}}(v,a)\,dv .
+\]
+Cross-song remixing draws the vocal from track $i$ and the accompaniment from an
+independently chosen track $j$, so the remixed example is the product of the
+marginals
+\[
+\boxed{\,p_{\text{remix}}(v,a)=p_V(v)\,p_A(a)\,}\;\ne\;p_{\text{song}}(v,a).
+\]
+Both laws share their marginals but differ in dependence structure:
+$p_{\text{song}}$ carries the vocal--accompaniment coupling of real music,
+$p_{\text{remix}}$ destroys it. Remix re-designs the joint law while holding each
+source's own statistics fixed --- it is not additive noise.
+
+\subsection{It moves the mixture manifold}
+
+With real mixtures $\mathcal M=\{v+a:(v,a)\in\supp p_{\text{song}}\}$ and remixed
+mixtures the Minkowski sum
+\[
+\mathcal M_{\otimes}=\supp p_V+\supp p_A
+=\{v+a:v\in\supp p_V,\;a\in\supp p_A\},
+\]
+every real pair is an admissible independent pair, so
+$\mathcal M\subseteq\mathcal M_{\otimes}$, generically strictly and with higher
+dimension: coupling confines real mixtures to a lower-dimensional sheet, remix fills
+the surrounding volume. A separator trained on $\mathcal M_{\otimes}$ must succeed on
+a strictly larger set that still contains the test mixtures --- the mechanism behind
+pre-registered \textbf{H-02a} (remix dominance).
+
+\subsection{Where independence breaks}
+
+Two honest caveats. \emph{Key/tempo coherence:} $p_{\text{remix}}$ places mass on
+musically incoherent mixtures absent from the test set, a covariate shift
+($\mathcal M_{\otimes}\setminus\mathcal M\neq\varnothing$) that may understate remix's
+benefit or waste capacity on a train-only regime. \emph{Stem bleed:} MUSDB stems are
+imperfectly isolated, so $v_k$ retains a little of $a_k$; under remix that bleed
+belongs to a different song than the accompaniment, a small inconsistency the
+idealized $p_Vp_A$ ignores. The remix partner is drawn independently from the active
+pool ($\Pr[i=j]=1/n\approx1.2\%$ at $n=86$; the code-verified UMX/Demucs behavior).
+
+\section{Effective sample size: combinatorics with honest bounds}
+
+Let each of $N$ songs yield $c=\lfloor T/L\rfloor\approx40$ non-overlapping chunks
+($T\approx240$\,s, $L=6$\,s). Without remix the pool is coupled pairs,
+\[
+P_{\text{no-remix}}\approx Nc\approx 3.4\times10^{3},
+\]
+highly correlated within a song, so the coherence degrees of freedom are nearer the
+song count $N$ than $Nc$. With remix any vocal chunk pairs with any accompaniment
+chunk,
+\[
+P_{\text{remix}}\approx (Nc)^2\approx 1.2\times10^{7},
+\]
+but assembled from only $2Nc$ source atoms (the same chunks reused): remix
+manufactures pairings, not new source content. Hence the honest bound
+\[
+\underbrace{N}_{\text{song-level dof}}\ \lesssim\ n_{\text{eff}}\ \lesssim\
+\underbrace{(Nc)^2}_{\text{distinct mixtures}},
+\]
+with the truth set by the unknown correlation length across chunks and songs.
+Doubling $N$ doubles source atoms and quadruples pairings, yet raises musical
+diversity only linearly and with diminishing novelty --- so ``$12\times$ more songs
+$\neq 12\times$ more effective data,'' and the scaling question is empirical.
+
+\section{Gain and flip as group actions on a magnitude model}
+
+\subsection{Sign flip is exactly magnitude-invariant --- the negative control}
+
+Sign flip is the $\mathbb Z_2=\{+1,-1\}$ action $s\mapsto-s$ (per source,
+$p=\tfrac12$). The STFT is linear, so
+\[
+\STFT(-s)[k,m]=-\STFT(s)[k,m]
+\quad\Longrightarrow\quad
+\boxed{\ \big|\STFT(-s)\big|=\big|\STFT(s)\big|.\ }
+\]
+A magnitude-mask model's training signal is a function of $\big(|X|,|V|\big)$ only
+(standardized $\log(1+|X|)$ input, $|V|$ target, phase used solely at
+reconstruction), so the target $|V|=|{-V}|$ is exactly flip-invariant.
+
+The subtlety: per-source flip can give $x=-v+a$ with $|X|=|A-V|\neq|V+A|$. It washes
+out because audio has no absolute polarity, so each marginal is negation-symmetric,
+$p_S(s)=p_S(-s)$, giving $A\dequal-A$ and
+\[
+|V+A|\ \dequal\ |V-A|.
+\]
+The two configurations flip produces are equidistributed; with remix on, independent
+per-source flips are a measure-preserving self-map of the training law, so
+\[
+\boxed{\ \Delta_{\text{flip}}
+=\overline{\val}(\text{FULL})-\val(\text{FULL}\setminus\text{flip})\approx0
+\ \text{within}\ \sigma_{\text{seed}}.\ }
+\]
+This is the pre-registered placebo: a magnitude model cannot benefit from flip, so
+$\Delta_{\text{flip}}>\sigma_{\text{seed}}$ signals a bug and halts interpretation.
+The property survives the \S3.4 contingency loss, since SI-SDR is itself
+sign-invariant ($\hat v\mapsto-\hat v$ sends $\alpha\mapsto-\alpha$ and fixes the
+projection norms).
+
+\subsection{Gain versus per-chunk standardization}
+
+Per-source gain multiplies each source by $g_v,g_a\sim U(0.25,1.25)$. Decompose
+$g_v=g\rho_v$, $g_a=g\rho_a$ with common scale $g=\sqrt{g_vg_a}$ and relative balance
+$\rho_v/\rho_a=g_v/g_a$. Under a common scale $x\mapsto gx$, $|X|\mapsto g|X|$ and for
+energetic bins ($|X|\gg1$) $\log(1+g|X|)\approx\log g+\log|X|$, a constant shift that
+per-chunk mean-subtraction removes (std-division absorbs the residual). So the
+standardized input is approximately invariant to a common gain. But the target scales,
+$|V|\mapsto g_v|V|$, and in ratio form
+\[
+M^\star=\frac{|V|}{|X|}\ \longmapsto\
+\frac{g_v|V|}{|g_vV+g_aA|}=\frac{|V|}{\big|V+(g_a/g_v)A\big|},
+\]
+depending only on the relative gain $g_a/g_v$. Thus the input statistics are
+(near-)invariant while the target/mask scale changes: gain's informative content is
+the augmentation of the vocal-to-accompaniment balance, not the overall level the
+front end already normalizes away.
+
+\section{Scaling-curve models at four points}
+
+\subsection{What four points identify}
+
+\begin{center}
+\begin{tabular}{lccc}
+\hline
+Form & Equation & Params & Saturates?\\
+\hline
+log-linear & $y=a+b\log_2 N$ & 2 & no\\
+saturating exp. & $y=y_\infty-c\,e^{-\gamma N}$ & 3 & yes\\
+power law & $y=y_\infty-c\,N^{-\gamma}$ & 3 & yes\\
+\hline
+\end{tabular}
+\end{center}
+
+We measure $N\in\{21,43,64,86\}$. The 2-parameter log-linear fit leaves 2 residual
+degrees of freedom (checkable lack-of-fit); a 3-parameter saturating form leaves 1
+and makes its asymptote $y_\infty$ an extrapolation to $N\to\infty$ from four un-bent
+points spanning a $4\times$ range --- ill-posed, so $y_\infty$ is not identifiable.
+Four points identify the local slope and its sign, monotonicity, and whether the
+secants decrease (bending); they cannot identify the asymptote, the functional form,
+or anything past $N=86$.
+
+\subsection{Secant rule and parametric bootstrap}
+
+Because the form is unidentifiable, \textbf{H-02b} is a local statement:
+$\overline{\val}(86)-\val(43)>\sigma_{\text{seed}}$. The instrument is the secant slope
+\[
+\mathrm{sec}(N_1,N_2)=\frac{y(N_2)-y(N_1)}{\log_2 N_2-\log_2 N_1}\quad[\text{dB/doubling}],
+\]
+reported for consecutive pairs; a decreasing sequence is bending, a flat one
+log-linear, with no parametric commitment. With four points nothing can be resampled,
+so the slope CI is a \emph{parametric} bootstrap: draw
+$y_i^{*}=y_i+\varepsilon_i^{*}$, $\varepsilon^{*}\sim\mathcal N(0,\sigma_{\text{seed}})$,
+refit
+\[
+b=\frac{\sum_i(x_i-\bar x)(y_i-\bar y)}{\sum_i(x_i-\bar x)^2},\qquad x_i=\log_2 N_i,
+\]
+for $B=10{,}000$ replicates and take the central-$95\%$ percentiles of
+$\{b^{*}\}$. The width is honest, not a defect. The fit is drawn only over $[21,86]$;
+any extension carries the caption ``descriptive extrapolation --- no data beyond 86
+songs.''
+
+\section{Statistics of the design}
+
+\subsection{Pooled $\sigma_{\text{seed}}$}
+
+Two cells carry three seeds (FULL-86, n21) with sample variances $s^2_{\text{FULL}}$,
+$s^2_{\text{n21}}$; the noise band is
+\[
+\sigma_{\text{seed}}=\sqrt{\tfrac12\big(s^2_{\text{FULL}}+s^2_{\text{n21}}\big)}.
+\]
+Pooling the two extremes of the data axis is conservative: the small-data cell is
+plausibly noisier, so it inflates $\sigma_{\text{seed}}$ over a FULL-only estimate and
+raises every decision threshold, admitting fewer false ``it matters'' verdicts. Gate
+G2 escalates (adds seeds to \code{no\_remix}) if this band is too wide to resolve
+plausible deltas.
+
+\subsection{One pre-registered contrast}
+
+H-02a is a single contrast,
+$\Delta_{\text{remix}}>\max(\Delta_{\text{gain}},\Delta_{\text{flip}})+\sigma_{\text{seed}}$.
+Exactly one comparison carries the verdict, so no multiple-comparison correction
+applies to it; the full $\Delta$ table and interaction gap are descriptive (CIs, no
+tests), so they cannot become hidden extra comparisons. Testing all three $\Delta_t$
+as hypotheses would instead demand a Bonferroni-style correction.
+
+\subsection{The interaction gap}
+
+Each $\Delta_t=\overline{\val}(\text{FULL})-\val(\text{FULL}\setminus t)$ is a last-in
+contribution. Additivity would give $\Delta_{\text{total}}=\sum_t\Delta_t$; the
+deviation is
+\[
+G=\Delta_{\text{total}}-\!\!\sum_{t\in\{\text{remix,gain,flip}\}}\!\!\Delta_t,\qquad
+\Delta_{\text{total}}=\overline{\val}(\text{FULL})-\val(\text{NONE}).
+\]
+$G>0$ is synergy (complementary transforms; individual $\Delta_t$ understate),
+$G<0$ is redundancy (overlapping transforms; $\Delta_t$ overstate --- the expected
+sign, since flip is redundant and remix/gain both perturb the mixture balance),
+$G\approx0$ is additive. $G$ is reported with a CI, not tested.
+
+\paragraph{Cross-reference index.} \S1--2 $\to$
+\code{data/musdb\_dataset.py::MusdbChunks}; \S3 $\to$
+\code{data/augment.py::\{random\_sign\_flip,random\_gain\}} and the front-end
+standardization in \code{train/loop.py::prepare\_batch}; \S4 $\to$
+\code{analysis/scaling.py::\{fit\_log2,secant\_slopes\}}; \S5 $\to$
+\code{analysis/scaling.py::\{pooled\_seed\_sigma,loo\_table\}}. Every claim is
+exercised by \code{tests/test\_augment\_switchboard.py} and
+\code{tests/test\_scaling\_analysis.py} (gate G0).
+
+\end{document}
