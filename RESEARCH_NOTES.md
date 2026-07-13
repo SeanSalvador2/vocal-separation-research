@@ -96,7 +96,7 @@ model leaderboard (arXiv **2305.07489**, Solovyev 2023). Challenge metrics are
   `vocals`, `drums`, `bass`, `other` (+ the mixture). This exactly matches
   StemCraft's existing `collapse_to_musdb4` mapping (guitar+piano+other → other).
 - **MUSDB18** (compressed **STEMS**/MP4, AAC — effective bandwidth ~16 kHz):
-  ~4.4 GB (StemCraft's downloader measured **4.68 GB**). Zenodo record **1117372**.
+  ~4.7 GB per Zenodo (StemCraft's downloader measured **4.68 GB**). Zenodo record **1117372**.
 - **MUSDB18-HQ** (uncompressed WAV, full bandwidth): Zenodo record **3338373**;
   **access-restricted** ("educational purposes only … request access, manually
   checked"). Larger (tens of GB uncompressed).
