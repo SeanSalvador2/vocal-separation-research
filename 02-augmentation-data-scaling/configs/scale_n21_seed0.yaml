@@ -1,0 +1,7 @@
+# Scaling point (MASTER_PLAN §3.2): 21-song nested subset, full recipe. Seed 0.
+# n21 is a 3-seed anchor cell (seeds 0,1,2) — with FULL-86 it pins σ_seed (§2, G2).
+# The remix pool shrinks with the subset (part of the treatment, not a confound, §12).
+base: base.yaml
+seed: 0
+data:
+  track_allowlist_csv: 02-augmentation-data-scaling/configs/subsets/n21.csv

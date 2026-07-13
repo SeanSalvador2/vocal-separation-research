@@ -1,0 +1,10 @@
+# Contingency (MASTER_PLAN §3.4, budget-gated): NO augmentation under sisdr, paired
+# with contingency_full_sisdr to re-check Δ_total's sign under the alternative loss.
+# Seed 0. Sensitivity appendix only.
+base: base.yaml
+arm: sisdr
+seed: 0
+augment:
+  remix: false
+  gain: false
+  flip: false

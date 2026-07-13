@@ -59,8 +59,10 @@ territory Phase R lives in.
   metrics for music source separation"* (ICASSP 2022, arXiv 2202.07968) benchmark a
   large set of losses in a controlled setup and cross-correlate candidate metrics
   with a subjective test; they find spectrogram-domain losses (L2/log-L1 family)
-  competitive and note SDR can mislead. Défossez et al. (arXiv 1911.13254) report L1
-  waveform loss outperforming SI-SNR-style losses for MSS. So the "obvious" move of
+  competitive and note SDR can mislead. Défossez et al. (arXiv 1911.13254) train
+  Demucs on L1 waveform loss — their in-paper ablation is L1-vs-L2, and the contrast
+  with SI-SNR-style training is indirect (Conv-TasNet, trained on SI-SNR, shows
+  audible artifacts in their human evaluations). So the "obvious" move of
   training on your eval metric (SI-SDR) is *not* clearly right for music — a genuine,
   cheap-to-test tension. (Direction #1.)
 - **Multi-resolution STFT losses** come from the vocoder literature and are commonly
@@ -138,7 +140,8 @@ defensible result (note: a clean negative *is* a defensible result in every opti
 
 ### #1 — "Train on what you test?" A controlled loss-function study at small scale
 - **Builds on**: Gusó et al., ICASSP 2022 (arXiv 2202.07968); Défossez et al. (arXiv
-  1911.13254) reporting L1 > SI-SNR for MSS training.
+  1911.13254), whose Demucs trains on L1 waveform loss (in-paper ablation: L1 vs L2;
+  the L1-vs-SI-SNR contrast is indirect, via SI-SNR-trained Conv-TasNet's artifacts).
 - **Hypothesis**: training a compact mask U-Net directly on (negative) SI-SDR does
   **not** beat L1-magnitude on SI-SDR evaluation — the literature's tension holds at
   small scale — but a multi-resolution STFT auxiliary term reduces audible artifacts.
@@ -292,8 +295,11 @@ defensible result (note: a clean negative *is* a defensible result in every opti
 ### #8 — The silence problem: vocal-activity-aware sampling and the cost of quiet
 - **Builds on**: MUSDB's long vocal-silent stretches (documented in our own Phase-1
   EDA); informal silent-chunk handling in UMX/Spleeter training lore; BSRNN's
-  source-activity detector for pseudo-labeling (arXiv 2209.15174) — but no paper
-  reports a *controlled* chunk-sampling-policy ablation for MSS training.
+  source-activity detector for pseudo-labeling (arXiv 2209.15174). Adjacent work
+  exists — BSMamba2 (arXiv 2508.14556) attacks sparse-vocal robustness via
+  architecture, and Demucs augments by injecting silence — but none defines a
+  silence-leakage metric or reports a sampling-policy-vs-leakage tradeoff; that
+  metric + tradeoff is the defensible gap (see 08-silence-leakage/research/LITERATURE.md §4).
 - **Hypothesis**: (a) energy-weighted chunk sampling beats uniform sampling on
   overall vocals SI-SDR; but (b) fully *dropping* silent chunks hurts the model's
   false-positive behavior — measured as energy leaked into `v̂` during truly silent

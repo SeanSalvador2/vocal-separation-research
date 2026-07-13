@@ -1,0 +1,7 @@
+# Contingency (MASTER_PLAN §3.4, budget-gated): only if Direction 01 replaces the
+# project default loss (H-01a refuted -> sisdr). Re-run the FULL recipe under sisdr
+# to check the factorization's sign structure is loss-stable. Seed 0. Reported as a
+# sensitivity appendix; does NOT alter the H-02a/b verdicts (defined under l1mag).
+base: base.yaml
+arm: sisdr
+seed: 0

@@ -1,0 +1,6 @@
+# Sweep arm (MASTER_PLAN §3.2): msemag, seed 1, REDUCED budget.
+# Only `arm`/`seed` differ from base.yaml - the controlled-comparison invariant.
+base: base.yaml
+arm: msemag
+seed: 1
+budget_name: reduced

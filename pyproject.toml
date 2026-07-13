@@ -1,0 +1,16 @@
+[tool.pytest.ini_options]
+# CPU-only, synthetic-fixture test suite for the SingNet package (MASTER_PLAN G0).
+# The default suite must stay green on CPU in under 5 minutes and never touch
+# MUSDB, the network, or a GPU. Data-time deps (musdb/stempeg/museval) are
+# import-guarded so their absence skips rather than errors.
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "slow: CPU tests that individually exceed ~1s; still part of the default suite",
+]
+
+[tool.black]
+line-length = 110
+
+[tool.ruff]
+line-length = 110

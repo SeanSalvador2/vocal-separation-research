@@ -1,0 +1,7 @@
+# LOO ablation (MASTER_PLAN §3.1): remove REMIX, keep gain + flip. Seed 0.
+# Without remix, the training example is the true track mixture (the same track's
+# own stems at the same window); every other invariant is held fixed.
+base: base.yaml
+seed: 0
+augment:
+  remix: false

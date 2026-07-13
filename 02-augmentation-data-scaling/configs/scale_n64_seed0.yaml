@@ -1,0 +1,5 @@
+# Scaling point (MASTER_PLAN §3.2): 64-song nested subset (n43 ⊂ n64), full recipe. Seed 0.
+base: base.yaml
+seed: 0
+data:
+  track_allowlist_csv: 02-augmentation-data-scaling/configs/subsets/n64.csv

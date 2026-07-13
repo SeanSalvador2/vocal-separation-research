@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+.ruff_cache/
+.mypy_cache/
+
+# Training artefacts and data (never committed — MASTER_PLAN §4.1 license hygiene)
+checkpoints/
+*.pt
+*.ckpt
+*.onnx
+
+# MUSDB / decoded audio shards (research-only, non-redistributable).
+# Anchored to the repo root so they do NOT swallow the `singnet/data/` source
+# package (an unanchored `data/` matches any directory named data, at any depth).
+*.wav
+*.mp4
+*.stem.mp4
+/data/
+/shards/
+
+# Results are committed selectively (registry.csv + eval CSVs). Local run
+# outputs that are NOT part of the committed record:
+01-loss-function-study/results/listening_kit/
+01-loss-function-study/results/figures/
+
+# OS / editor
+.DS_Store
