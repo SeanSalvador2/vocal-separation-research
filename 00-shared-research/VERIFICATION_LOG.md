@@ -111,6 +111,16 @@ _(01 loss-study, 02 aug/scaling, 03 band-split, 05 LoRA, 06 robust, 08 silence, 
 | 08-6 | SLR silence-leakage metric | Is it published? | — | **OUR CONSTRUCTION** | Formal draft (thresholds/eps/$L_{\min}$) in `silence-metrics-grounding.md §3`. |
 | 08-GAP | Gap-check: controlled chunk-sampling ablation for MSS | Does it exist? | WS | **PARTIAL (novelty-affecting)** | Query 2026-07-13. **RESEARCH_DIRECTIONS "nobody reports a chunk-sampling ablation" is too strong**: forced-singing-% ablation (`[unverified cite]`), Demucs chunk-drop, BSMamba2 all adjacent. **Genuinely novel = the SLR metric + policy-vs-leakage tradeoff.** Flagged to orchestrator; RESEARCH_DIRECTIONS not edited (no firm counter-citation). |
 
+### 10 — Demucs distillation
+
+| # | Source / ID | Claim checked | Route | Verdict | Notes |
+|---|---|---|---|---|---|
+| 10-1 | Hinton et al., **1503.02531** | soft targets/dark knowledge; temperature $T\in[1,20]$; lower T for small students | WS | **CONFIRMED** | Hinton/Vinyals/Dean. **KD is classification-only** — regression analogue is OUR framing. |
+| 10-2 | FMA, **1612.01840** + `mdeff/fma` | subsets (8k/25k/106k/full); **audio per-artist CC**, metadata CC BY 4.0, research-use | WS + GH | **CONFIRMED** | Defferrard et al. **"license-safe" nuance: audio licenses vary per track** (filter via metadata); RESEARCH_DIRECTIONS "CC-licensed subset" correct but needs the nuance. |
+| 10-3 | MVSep, **2305.07489** | benchmarks + leaderboard + ensembling top SDX'23 | HF | **CONFIRMED** | Solovyev et al. Teacher-selection context. |
+| 10-4 | HT-Demucs teacher errors | vocal↔other bleeding transfers via distillation | HF | **CONFIRMED** | From shared Demucs-family note; central Dir-10 risk. |
+| 10-5 | Regression distillation objectives / temperature analogue | waveform-L1 / spectrogram-mag / mask-space KD; spectral compression as temp analogue | — | **OUR FRAMING** | Marked as analogy (no softmax in regression); in LITERATURE §5. |
+
 ---
 
 ## Gap-check queries (logged per Step)
