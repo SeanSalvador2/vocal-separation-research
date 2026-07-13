@@ -1,0 +1,8 @@
+# EXPLORATORY (MASTER_PLAN §3.2): l1mrstft lambda sensitivity, lambda=0.25.
+# Clearly labelled exploratory - not part of the pre-registered 15-run sweep.
+base: base.yaml
+arm: l1mrstft
+seed: 0
+budget_name: reduced
+loss_kwargs:
+  lam: 0.25

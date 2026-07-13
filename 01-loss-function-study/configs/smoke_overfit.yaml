@@ -1,0 +1,20 @@
+# G1 smoke test config (MASTER_PLAN §8 step 2, §9 gate G1). RUN LATER (GPU, <1h).
+#
+# PASS criteria (measured, not asserted here):
+#   * a single-chunk overfit reaches train SI-SDR > +20 dB within 2k steps, AND
+#   * a 5-track mini-run beats the do-nothing floor on val-mini.
+# Also record measured steps/s here to apply the §3.2 budget-scaling rule.
+#
+# Overfit is achieved by a tiny dataset length (augmentation/remix OFF) so the
+# loader replays the same few chunks — the model should drive them to near-zero
+# error. This is the cheap "prove the pipeline learns" gate before any sweep.
+
+base: base.yaml
+arm: l1mag
+seed: 0
+budget_name: smoke
+steps: 2000
+batch_size: 1
+augment: false
+remix: false
+amp: false
