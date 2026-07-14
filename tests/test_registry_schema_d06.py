@@ -20,8 +20,13 @@ D06_BLOCK = ("epsilon", "trim_q", "kept_fraction_observed", "trim_energy_stats_p
 def test_d06_columns_are_the_appended_tail() -> None:
     for col in D06_BLOCK:
         assert col in REGISTRY_COLUMNS
-    assert REGISTRY_COLUMNS[-4:] == D06_BLOCK
-    assert REGISTRY_COLUMNS[-5] == "peak_vram_gb"  # the D05 block still precedes them
+    # The D06 block is a contiguous append after peak_vram_gb (the D05 tail). Direction 08
+    # later appends a further five columns, so the block is located by index rather than as
+    # the literal tail (no D06 column moved — the same no-column-moved guarantee, now aware
+    # of the D08 append).
+    start = REGISTRY_COLUMNS.index("epsilon")
+    assert REGISTRY_COLUMNS[start : start + 4] == D06_BLOCK
+    assert REGISTRY_COLUMNS[start - 1] == "peak_vram_gb"  # the D05 block still precedes them
     # base_width (D03) precedes the D05 block, which precedes the D06 block.
     assert REGISTRY_COLUMNS.index("base_width") < REGISTRY_COLUMNS.index("domain")
     assert REGISTRY_COLUMNS.index("domain") < REGISTRY_COLUMNS.index("epsilon")

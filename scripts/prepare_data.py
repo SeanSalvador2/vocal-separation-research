@@ -115,6 +115,43 @@ def write_manifest(out: str, splits_csv: str) -> None:
     print(f"wrote real manifest ({len(frame)} tracks) to {splits_csv}")
 
 
+def write_energy_profiles(
+    out: str, sample_rate: int = 44100, window_s: float = 6.0, grid_s: float = 1.0
+) -> None:
+    """Write per-track windowed vocal-RMS profiles alongside the shards (Direction 08 §5).
+
+    The vocal-activity signal the non-uniform sampling policies steer on: for each decoded
+    track, the RMS of its vocal stem over the 6-s chunk window at each 1-s grid start.
+    Writes ``<out>/energy_profiles.json`` (+ a sibling ``.csv``). CPU-minutes, RUN LATER —
+    needs the decoded shards on disk; fails loud without them.
+    """
+    import soundfile as sf
+
+    from singnet.data.profiles import windowed_vocal_rms
+    from singnet.data.profiles import write_energy_profiles as _write
+
+    out_dir = Path(out)
+    track_dirs = sorted(p for p in out_dir.iterdir() if p.is_dir()) if out_dir.exists() else []
+    if not track_dirs:
+        raise SystemExit(f"no shards under {out_dir} — run decode first (RUN LATER)")
+
+    profiles: dict = {}
+    for track_dir in track_dirs:
+        voc_path = track_dir / "vocals.wav"
+        if not voc_path.exists():
+            raise SystemExit(f"FAIL: {track_dir.name} has no vocals.wav — run decode first")
+        vocals, sr = sf.read(voc_path, dtype="float32", always_2d=True)
+        if sr != sample_rate:
+            raise SystemExit(f"FAIL: {track_dir.name} sample rate {sr} != {sample_rate}")
+        mono = vocals.mean(axis=1)
+        profiles[track_dir.name] = windowed_vocal_rms(mono, sample_rate, window_s, grid_s)
+
+    path = out_dir / "energy_profiles.json"
+    _write(path, profiles, sr=sample_rate, window_s=window_s, grid_s=grid_s)
+    total = sum(len(p) for p in profiles.values())
+    print(f"wrote {len(profiles)} track profiles ({total} grid windows) to {path} (+ .csv)")
+
+
 def verify(out: str, sample_rate: int = 44100) -> None:
     """Re-check shard counts, sample rates, and mixture ≈ sum(stems)."""
     import numpy as np
@@ -146,12 +183,16 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--sample-rate", type=int, default=44100)
     parser.add_argument("--verify", action="store_true", help="verify existing shards (no decode)")
     parser.add_argument("--write-manifest", action="store_true", help="rewrite splits.csv from decoded folders")
+    parser.add_argument("--write-energy-profiles", action="store_true",
+                        help="Direction 08: per-track vocal-RMS profiles (6-s window, 1-s grid)")
     args = parser.parse_args(argv)
 
     if args.verify:
         verify(args.out, args.sample_rate)
     elif args.write_manifest:
         write_manifest(args.out, args.splits_csv)
+    elif args.write_energy_profiles:
+        write_energy_profiles(args.out, args.sample_rate)
     else:
         if not args.musdb_root:
             parser.error("decoding requires --musdb-root")

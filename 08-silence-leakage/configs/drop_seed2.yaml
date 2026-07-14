@@ -1,0 +1,9 @@
+# Direction 08 arm (MASTER_PLAN §4.2 run matrix): drop-silent sampling, seed 2.
+base: base.yaml
+arm: drop
+loss: l1mag
+seed: 2
+budget_name: reduced
+sampling:
+  policy: drop
+  theta_db: -60.0

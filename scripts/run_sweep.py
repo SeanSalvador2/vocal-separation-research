@@ -32,6 +32,11 @@ minutes).
     python scripts/run_sweep.py --direction 06 --stage reduced  # the 10 new bleed/trim runs (RUN LATER)
     python scripts/run_sweep.py --direction 06 --stage contingency  # 2 sisdr contingency runs (RUN LATER)
 
+    # Direction 08 — silence-leakage metric + chunk-sampling policies
+    python scripts/run_sweep.py --direction 08 --dry-run        # CPU: policy/θ/λ per config
+    python scripts/run_sweep.py --direction 08 --stage reduced  # the 8 new sampling-policy runs (RUN LATER)
+    python scripts/run_sweep.py --direction 08 --stage contingency  # 2 sisdr contingency runs (RUN LATER)
+
 ``--dry-run`` (CPU, no GPU, no data) instantiates each config and prints the
 per-config summary that matters for that direction — the augmentation switchboard
 + subset size (Directions 01/02), the band edges, chosen width ``c`` and exact
@@ -76,6 +81,10 @@ DIRECTIONS: dict[str, dict[str, str]] = {
     "06": {
         "config_dir": "06-robust-training/configs",
         "registry": "06-robust-training/results/registry.csv",
+    },
+    "08": {
+        "config_dir": "08-silence-leakage/configs",
+        "registry": "08-silence-leakage/results/registry.csv",
     },
 }
 
@@ -135,6 +144,17 @@ D06_REDUCED = [
     "trim30_q10_seed0.yaml", "trim_clean_seed0.yaml",
 ]
 D06_CONTINGENCY = ["contingency_bleed30_sisdr_seed0.yaml", "contingency_trim30_sisdr_seed0.yaml"]
+
+# Direction 08 launch lists (MASTER_PLAN §4.2 run matrix): 8 new runs. The `uniform` cell
+# is NOT here — it is the shared Direction-01 l1mag cell (config-hash-equal to base.yaml;
+# reused, not retrained, §4.2). The two contingency runs are budget-gated (run only if
+# Direction 01 flips the default loss).
+D08_REDUCED = [
+    "energy_seed0.yaml", "energy_seed1.yaml", "energy_seed2.yaml",
+    "drop_seed0.yaml", "drop_seed1.yaml", "drop_seed2.yaml",
+    "curriculum_seed0.yaml", "curriculum_seed1.yaml",
+]
+D08_CONTINGENCY = ["contingency_uniform_sisdr_seed0.yaml", "contingency_energy_sisdr_seed0.yaml"]
 
 
 def _already_done(config_path: Path, registry: str) -> bool:
@@ -303,6 +323,15 @@ def configs_for(
             "direction 06 'full'/clean cell is the shared Direction-01 l1mag cell (reused, "
             "not retrained, §3.3) — use --stage reduced or contingency."
         )
+    if direction == "08":
+        if stage == "reduced":
+            return [config_dir / name for name in D08_REDUCED]
+        if stage == "contingency":
+            return [config_dir / name for name in D08_CONTINGENCY]
+        raise SystemExit(
+            "direction 08 'full'/uniform cell is the shared Direction-01 l1mag cell (reused, "
+            "not retrained, §4.2) — use --stage reduced or contingency."
+        )
     # direction 02
     if stage == "reduced":
         return [config_dir / name for name in D02_REDUCED]
@@ -456,6 +485,47 @@ def dry_run_d06(config_paths: list[Path]) -> None:
           "(MASTER_PLAN §3.1/§3.2) before GPU spend.")
 
 
+def dry_run_d08(config_paths: list[Path]) -> None:
+    """Direction 08 dry-run: policy / θ / λ per config, with curriculum's λ(t) endpoints (no GPU).
+
+    For each config prints the chunk-sampling policy and the constant that steers it (θ for
+    ``drop``, λ for ``energy``/``curriculum``), plus — for ``curriculum`` — the pinned
+    schedule endpoints λ(0)=1.0 → λ(T/2..T)=floor and the annealing budget, so a mislabelled
+    policy or a broken schedule is caught before any GPU spend (MASTER_PLAN §7 run book).
+    """
+    from singnet.data.sampling import build_chunk_sampler
+    from singnet.utils.config import sampling_policy
+
+    print(f"DRY RUN — direction 08: {len(config_paths)} configs (no training)\n")
+    header = (f"{'config':<38} {'arm':<12} {'loss':<6} {'seed':<4} {'policy':<11} "
+              f"{'θ(dB)':<7} {'λ':<6} {'λ(t) schedule':<26} hash")
+    print(header)
+    print("-" * len(header))
+    for path in config_paths:
+        if not path.exists():
+            print(f"{path.name:<38} MISSING")
+            continue
+        cfg = resolve_config(path)
+        spec = sampling_policy(cfg)
+        sampler = build_chunk_sampler(cfg)
+        policy = spec["policy"]
+        theta = f"{spec['theta_db']:.0f}" if policy == "drop" else "—"
+        lam = f"{spec['floor_lambda']:.2f}" if policy in ("energy", "curriculum") else "—"
+        if policy == "curriculum":
+            steps = int(cfg.get("steps", 0))
+            schedule = f"1.0→{spec['floor_lambda']:.1f} over 0..{steps // 2}, hold"
+        else:
+            schedule = "n/a"
+        print(f"{path.name:<38} {str(cfg.get('arm','?')):<12} "
+              f"{str(cfg.get('loss', cfg.get('arm'))):<6} {str(cfg.get('seed','?')):<4} "
+              f"{policy:<11} {theta:<7} {lam:<6} {schedule:<26} {hash_config(cfg)}")
+    base = Path(DIRECTIONS['08']['config_dir']) / "base.yaml"
+    if base.exists():
+        print(f"\nshared uniform cell (= D01 l1mag) config-hash: {hash_config(resolve_config(base))}")
+    print("Verify policy/θ/λ per config; the uniform arm reuses the shared cell "
+          "(MASTER_PLAN §4.1/§4.2) before GPU spend.")
+
+
 def dry_run(config_paths: list[Path], direction: str) -> None:
     """Instantiate each config's pipeline; print the switchboard + subset size (no GPU)."""
     if direction == "03":
@@ -466,6 +536,9 @@ def dry_run(config_paths: list[Path], direction: str) -> None:
         return
     if direction == "06":
         dry_run_d06(config_paths)
+        return
+    if direction == "08":
+        dry_run_d08(config_paths)
         return
     print(f"DRY RUN — direction {direction}: {len(config_paths)} configs (no training)\n")
     header = (f"{'config':<32} {'loss':<9} {'seed':<4} {'remix':<6} {'gain':<6} "
@@ -495,7 +568,7 @@ def dry_run(config_paths: list[Path], direction: str) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--direction", choices=["01", "02", "03", "05", "06"], default="01",
+    parser.add_argument("--direction", choices=["01", "02", "03", "05", "06", "08"], default="01",
                         help="which study to run")
     parser.add_argument("--stage", default="reduced",
                         choices=["reduced", "full", "contingency", "probes", "main"])

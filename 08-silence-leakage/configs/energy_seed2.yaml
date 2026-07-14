@@ -1,0 +1,9 @@
+# Direction 08 arm (MASTER_PLAN §4.2 run matrix): energy-weighted sampling, seed 2.
+base: base.yaml
+arm: energy
+loss: l1mag
+seed: 2
+budget_name: reduced
+sampling:
+  policy: energy
+  floor_lambda: 0.1

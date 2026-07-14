@@ -20,8 +20,9 @@ def test_new_columns_are_in_the_schema() -> None:
     # The four D02 columns are appended as a contiguous block after the original
     # Direction-01 schema (no existing column position changed). Direction 03
     # appends base_width after them, Direction 05 appends a further seven
-    # (domain … peak_vram_gb), and Direction 06 appends a final four
-    # (epsilon … trim_energy_stats_path) — each still a backward-compatible append.
+    # (domain … peak_vram_gb), Direction 06 appends four (epsilon …
+    # trim_energy_stats_path), and Direction 08 appends a final five (policy …
+    # best_val_slr) — each still a backward-compatible append (no D02 column moved).
     d02_block = ("aug_remix", "aug_gain", "aug_flip", "n_songs")
     start = REGISTRY_COLUMNS.index("aug_remix")
     assert REGISTRY_COLUMNS[start : start + 4] == d02_block
@@ -30,11 +31,15 @@ def test_new_columns_are_in_the_schema() -> None:
     assert REGISTRY_COLUMNS[start + 5 : start + 12] == (
         "domain", "recipe", "rank", "lr", "trainable_params", "trainable_share", "peak_vram_gb",
     )
-    # the Direction-06 block follows the D05 block, ending the schema.
-    assert REGISTRY_COLUMNS[start + 12 :] == (
+    # the Direction-06 block follows the D05 block.
+    assert REGISTRY_COLUMNS[start + 12 : start + 16] == (
         "epsilon", "trim_q", "kept_fraction_observed", "trim_energy_stats_path",
     )
-    assert REGISTRY_COLUMNS[-1] == "trim_energy_stats_path"
+    # the Direction-08 block follows the D06 block, ending the schema.
+    assert REGISTRY_COLUMNS[start + 16 :] == (
+        "policy", "theta_db", "floor_lambda", "silent_exposure_observed", "best_val_slr",
+    )
+    assert REGISTRY_COLUMNS[-1] == "best_val_slr"
 
 
 def test_runrecord_roundtrips_switchboard(tmp_path) -> None:

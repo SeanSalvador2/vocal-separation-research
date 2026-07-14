@@ -1,0 +1,11 @@
+# Direction 08 arm (MASTER_PLAN §4.1, §4.2 run matrix): energy-weighted sampling, seed 0
+# (3-seed quality cell — H-08a). p(s) ∝ (1−λ)·E(s)/ΣE + λ/N, λ=0.1 uniform floor: vocal-
+# active starts up-weighted, silent starts down-weighted but NEVER excluded.
+base: base.yaml
+arm: energy
+loss: l1mag                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced
+sampling:
+  policy: energy
+  floor_lambda: 0.1        # uniform-floor mass λ (mass ≥ λ/N per start, §4.1)

@@ -1,0 +1,10 @@
+# Direction 08 arm (MASTER_PLAN §4.2): CONTINGENCY (budget-gated): uniform sampling under
+# the sisdr loss, seed 0. RUN LATER, only if Direction 01 flips the project default loss
+# — noting the known interaction (§4.2): sisdr's silent-target guard already performs a
+# soft `drop` INSIDE the loss, so the policy × guard interplay enters the sensitivity note.
+# No `sampling:` block -> uniform (the policy × loss interaction is the point, not a policy).
+base: base.yaml
+arm: uniform
+loss: sisdr                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced

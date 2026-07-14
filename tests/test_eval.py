@@ -1,4 +1,4 @@
-"""Oracle/floor masks and full-track scoring (G0, §7.3)."""
+"""Oracle/floor masks and full-track scoring (G0, §7.3; Direction 08 SLR columns §6)."""
 
 from __future__ import annotations
 
@@ -44,3 +44,32 @@ def test_score_system_structure() -> None:
     # a perfect vocal estimate scores far above the do-nothing floor
     perfect = score_system("trackA", "oracle", vocals, accompaniment, vocals, accompaniment, mixture)
     assert perfect.sisdr_vocals > scores.sisdr_vocals
+    # without slr=True the SLR columns stay NaN (backward-compatible default).
+    assert np.isnan(scores.slr_m60)
+
+
+def test_score_system_slr_columns() -> None:
+    # A GT vocal that is silent for its second half (≥ L_min), so SLR is defined there.
+    sr = 1000
+    vocals = np.concatenate([np.full(2 * sr, 0.5), np.zeros(2 * sr)])
+    accompaniment = np.full(4 * sr, 0.3)
+    mixture = vocals + accompaniment
+    # do-nothing (v̂ = x) scores exactly 0 dB SLR at every θ — the readable anchor (§2.2).
+    do_nothing = score_system("t", "do_nothing", mixture, mixture, vocals, accompaniment, mixture,
+                              sr=sr, slr=True)
+    assert do_nothing.slr_m50 == 0.0 and do_nothing.slr_m60 == 0.0 and do_nothing.slr_m70 == 0.0
+    assert do_nothing.slr_n_regions_60 == 1.0  # the silent second half
+    # a perfect separator (v̂ = 0) leaks nothing -> SLR far below 0 dB.
+    perfect = score_system("t", "singnet", np.zeros_like(mixture), mixture, vocals,
+                           accompaniment, mixture, sr=sr, slr=True)
+    assert perfect.slr_m60 < -30.0
+
+
+def test_score_system_slr_requires_sr() -> None:
+    x = np.ones(1000)
+    try:
+        score_system("t", "s", x, x, x, x, x, slr=True)  # no sr
+        raised = False
+    except ValueError:
+        raised = True
+    assert raised

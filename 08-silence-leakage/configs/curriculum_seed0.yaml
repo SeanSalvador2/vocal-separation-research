@@ -1,0 +1,12 @@
+# Direction 08 arm (MASTER_PLAN §4.1, §4.2 run matrix): curriculum sampling, seed 0
+# (2-seed secondary arm). The `energy` form with λ annealed 1.0 → 0.1 linearly over the
+# first 50 % of steps, then held: starts uniform (fit the easy silence mode), ends energy
+# (concentrate on the hard active mode). λ(t) is pinned; total_steps comes from `steps`.
+base: base.yaml
+arm: curriculum
+loss: l1mag                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced
+sampling:
+  policy: curriculum
+  floor_lambda: 0.1        # the schedule's terminal λ (1.0 → 0.1 over the first half)

@@ -1,0 +1,12 @@
+# Direction 08 arm (MASTER_PLAN §4.2): CONTINGENCY (budget-gated): energy-weighted sampling
+# under the sisdr loss, seed 0. RUN LATER, only if Direction 01 flips the project default
+# loss. The sisdr silent-target guard's soft `drop` compounds with the energy policy's
+# down-weighting of silence — the policy × guard interplay the sensitivity note reports (§4.2).
+base: base.yaml
+arm: energy
+loss: sisdr                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced
+sampling:
+  policy: energy
+  floor_lambda: 0.1

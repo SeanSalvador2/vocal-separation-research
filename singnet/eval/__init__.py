@@ -14,6 +14,7 @@ from .evaluate import (
     oracle_ibm,
     oracle_irm,
     score_system,
+    validation_report,
     validation_sisdr,
 )
 from .overlap_add import (
@@ -36,6 +37,7 @@ __all__ = [
     "oracle_ibm",
     "oracle_irm",
     "score_system",
+    "validation_report",
     "validation_sisdr",
     "DEFAULT_OVERLAP",
     "EVAL_CHUNK_SAMPLES",

@@ -57,6 +57,9 @@ TRIM_TELEMETRY_COLUMNS = (
     "kept_energy_mean", "dropped_energy_mean",
     "kept_energy_median", "dropped_energy_median",
 )
+#: Direction 08 §6: cadence + schema of the realized silent-chunk exposure telemetry.
+SAMPLING_TELEMETRY_EVERY = 500
+SAMPLING_TELEMETRY_COLUMNS = ("step", "silent_fraction", "n_chunks", "theta_db")
 
 
 def build_training_loss(config: dict[str, Any]) -> SeparationLoss:
@@ -97,6 +100,49 @@ def write_trim_telemetry(path: str | Path, rows: list[dict[str, Any]]) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(rows, columns=list(TRIM_TELEMETRY_COLUMNS)).to_csv(path, index=False)
+
+
+# --- Direction 08: sampling exposure telemetry + the selection-bias guard ---
+
+def chunk_silent_fraction(vocals: Tensor, theta_db: float) -> float:
+    """Fraction of chunks in a ``(B, L)`` batch whose vocal-target RMS is below θ dBFS.
+
+    The policy's *realized* silent-chunk exposure (MASTER_PLAN §6) — closes the loop on
+    the THEORY §4 per-policy exposure predictions. Pure read, no RNG: logging it cannot
+    perturb training or the data stream.
+    """
+    flat = vocals.reshape(vocals.shape[0], -1).to(torch.float64)
+    rms = flat.pow(2).mean(dim=-1).sqrt()
+    return float((rms < 10.0 ** (theta_db / 20.0)).to(torch.float64).mean())
+
+
+def _exposure_row(step: int, silent_fraction: float, n_chunks: int, theta_db: float) -> dict[str, Any]:
+    """One realized-exposure telemetry row (§6)."""
+    return {
+        "step": int(step),
+        "silent_fraction": float(silent_fraction),
+        "n_chunks": int(n_chunks),
+        "theta_db": float(theta_db),
+    }
+
+
+def write_exposure_telemetry(path: str | Path, rows: list[dict[str, Any]]) -> None:
+    """Write the per-run silent-chunk exposure CSV (§6 policy-realized-behavior evidence)."""
+    import pandas as pd
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows, columns=list(SAMPLING_TELEMETRY_COLUMNS)).to_csv(path, index=False)
+
+
+def is_new_best(candidate_sisdr: float, best_sisdr: float) -> bool:
+    """Best-checkpoint selection test — **SI-SDR only** (MASTER_PLAN §6 selection guard).
+
+    Checkpoint selection must never see SLR, so the leakage comparison (H-08b) is not
+    selection-biased: the SLR reported for an arm is that of its *SI-SDR*-best checkpoint.
+    This function takes no SLR argument by construction (asserted in ``tests/test_train_d08.py``).
+    """
+    return candidate_sisdr > best_sisdr
 
 
 @dataclass
@@ -244,7 +290,10 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
     from ..data.corrupt import build_corruption
     from ..data.manifest import Manifest
     from ..data.musdb_dataset import MusdbChunks, WavShardStore, load_track_allowlist
-    from ..eval.evaluate import validation_sisdr
+    from ..data.profiles import load_energy_profiles
+    from ..data.sampling import build_chunk_sampler
+    from ..eval.evaluate import validation_report
+    from ..utils.config import sampling_policy
 
     config = resolve_config(config_path)
     config_hash = hash_config(config)
@@ -281,10 +330,17 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
     # every uncorrupted run, so the dataset is byte-identical). The eval-split guard
     # is structural — build_corruption refuses a non-train split by construction.
     corruption = build_corruption(config.get("corrupt"), "train")
+    # Direction 08 §4.1: the chunk-start policy. `build_chunk_sampler` returns the uniform
+    # no-op for every Direction 01–06 config (bit-identical data); a non-uniform policy
+    # needs the prep-time energy profiles (loud error if the profile pass has not run).
+    sampler = build_chunk_sampler(config)
+    energy_profiles = None
+    if not sampler.is_uniform():
+        energy_profiles = load_energy_profiles(Path(shard_root) / "energy_profiles.json")
     train_ds = MusdbChunks(
         store, manifest, "train", seed=seed, chunk_s=config.get("chunk_s", 6.0),
         track_allowlist=allowlist, pipeline=pipeline, length=total_steps * batch_size,
-        corrupt=corruption,
+        corrupt=corruption, sampler=sampler, energy_profiles=energy_profiles, batch_size=batch_size,
     )
     loader = DataLoader(
         train_ds, batch_size=batch_size, shuffle=False, drop_last=True,
@@ -317,6 +373,13 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
     step = start_step
     trim_rows: list[dict[str, Any]] = []
     kept_fraction_sum, kept_fraction_n = 0.0, 0
+    # Direction 08 §6: realized silent-chunk exposure telemetry + the SLR of the SI-SDR-best
+    # checkpoint (descriptive; SLR never drives selection — `is_new_best` is SI-SDR only).
+    exposure_rows: list[dict[str, Any]] = []
+    exposure_sum, exposure_n = 0.0, 0
+    window_sum, window_n = 0.0, 0
+    theta_db = sampler.theta_db
+    best_slr = float("nan")
     data_iter = iter(loader)
     while step < total_steps:
         try:
@@ -347,10 +410,23 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
             if step % TRIM_TELEMETRY_EVERY == 0:
                 trim_rows.append(_trim_telemetry_row(step, aux))
 
+        # §6 realized exposure: fraction of drawn chunks whose vocal target is silent (θ).
+        frac = chunk_silent_fraction(batch["vocals"], theta_db)
+        exposure_sum += frac
+        exposure_n += 1
+        window_sum += frac
+        window_n += 1
+        if step % SAMPLING_TELEMETRY_EVERY == 0:
+            exposure_rows.append(_exposure_row(step, window_sum / window_n, window_n * batch_size, theta_db))
+            window_sum, window_n = 0.0, 0
+
         if step % VAL_EVERY == 0:
-            final_val = validation_sisdr(model, stft, store, manifest, device)
-            if final_val > best_val:
-                best_val = final_val
+            # SLR is computed alongside SI-SDR every eval point, but checkpoint SELECTION
+            # is SI-SDR-only (`is_new_best` takes no SLR argument) — the §6 bias guard.
+            report = validation_report(model, stft, store, manifest, device)
+            final_val = report["sisdr"]
+            if is_new_best(final_val, best_val):
+                best_val, best_slr = final_val, report["slr"]
                 save_checkpoint(best_path, model=model, optimizer=optimizer, scheduler=scheduler,
                                 scaler=scaler, step=step, best_metric=best_val, config=config)
         if step % CHECKPOINT_EVERY == 0:
@@ -375,6 +451,15 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
         write_trim_telemetry(trim_energy_stats_path, trim_rows)
         kept_fraction_observed = kept_fraction_sum / max(1, kept_fraction_n)
     q_value = trim_q(config)
+    # Direction 08 §6: write the realized-exposure CSV and record the sampling metadata
+    # (policy + its relevant constant; the realized silent exposure; and the SLR of the
+    # SI-SDR-best checkpoint — descriptive, never a selection input).
+    exposure_stats_path = str(output_dir / "sampling_exposure.csv")
+    write_exposure_telemetry(exposure_stats_path, exposure_rows)
+    silent_exposure_observed = exposure_sum / max(1, exposure_n)
+    spec = sampling_policy(config)
+    policy_theta = spec["theta_db"] if spec["policy"] == "drop" else float("nan")
+    policy_lambda = spec["floor_lambda"] if spec["policy"] in ("energy", "curriculum") else float("nan")
     upsert_run(
         registry_path,
         RunRecord(
@@ -389,6 +474,8 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
             trim_q=float("nan") if q_value is None else q_value,
             kept_fraction_observed=kept_fraction_observed,
             trim_energy_stats_path=trim_energy_stats_path,
+            policy=spec["policy"], theta_db=policy_theta, floor_lambda=policy_lambda,
+            silent_exposure_observed=silent_exposure_observed, best_val_slr=best_slr,
         ),
     )
     return RunResult(run_id, config_hash, step, best_val, final_val, skip_rate, str(best_path))

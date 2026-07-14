@@ -1,0 +1,44 @@
+# Direction 08 base config (MASTER_PLAN §4.1, §4.2, §6). This file is the SHARED
+# UNIFORM CELL: it mirrors Direction 01's base identity fields exactly (model SingNet-C1
+# at base_channels=32, l1mag loss, reduced budget, full augmentation recipe, 86-song
+# split) and carries NO `sampling:` block, so the uniform policy canonicalizes away and
+# its config hash is BIT-IDENTICAL to Direction 01's `l1mag_seed0_reduced` (and
+# Directions 02/03/06's base). That equality (asserted by tests/test_train_d08.py, gate
+# G0) is why the uniform arm is *reused* from Direction 01 across the 3 seeds, never
+# retrained (§4.2: "0 new runs").
+#
+# The energy / drop / curriculum arms inherit this file and add an OPTIONAL `sampling:`
+# block. Because the uniform cell carries none, it hashes exactly as the old configs did
+# (`uniform` canonicalizes to "no sampling key"; §4.1). Only ONE thing ever varies in
+# this direction: the chunk-start distribution — everything else is D01 §7.1 verbatim.
+
+# --- experiment identity (mirrors D01 base) ---
+arm: l1mag                 # the shared uniform cell IS the D01 l1mag run
+seed: 0
+budget_name: reduced       # label only; `steps` is the real budget
+loss_kwargs: {}
+
+# --- training budget & schedule (identical to D01 REDUCED) ---
+steps: 16000               # REDUCED budget (§1.3); FULL = 40000
+batch_size: 16
+chunk_s: 6.0
+sample_rate: 44100
+amp: true
+deterministic: false
+
+# --- model (fixed SingNet-C1) ---
+base_channels: 32          # 9,835,745 params
+
+# --- data pipeline (fixed across arms; full recipe on the 86-song split) ---
+augment: true              # per-source gain + sign flip (§4.3)
+remix: true                # cross-track vocals+accompaniment remixing (§4.3)
+
+# --- locations (set at data-prep / run time; RUN LATER) ---
+# Non-uniform arms additionally read <shard_root>/energy_profiles.json, written by
+# `scripts/prepare_data.py --write-energy-profiles` (§5).
+shard_root: null
+splits_csv: 01-loss-function-study/configs/splits.csv   # the shared frozen split (§4)
+registry_path: 08-silence-leakage/results/registry.csv
+output_dir: checkpoints
+num_workers: 4
+gpu: ""

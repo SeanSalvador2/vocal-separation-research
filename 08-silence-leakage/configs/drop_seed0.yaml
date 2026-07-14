@@ -1,0 +1,11 @@
+# Direction 08 arm (MASTER_PLAN §4.1, §4.2 run matrix): drop-silent sampling, seed 0
+# (3-seed leakage-cost cell — H-08b). Uniform over starts whose window vocal RMS ≥ θ;
+# silent-window starts excluded ENTIRELY — the policy hypothesized to worsen SLR.
+base: base.yaml
+arm: drop
+loss: l1mag                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced
+sampling:
+  policy: drop
+  theta_db: -60.0          # window-RMS support threshold, dBFS (shared silence notion, §2.1)
