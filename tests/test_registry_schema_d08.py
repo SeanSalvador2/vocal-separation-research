@@ -21,8 +21,12 @@ D08_BLOCK = ("policy", "theta_db", "floor_lambda", "silent_exposure_observed", "
 def test_d08_columns_are_the_appended_tail() -> None:
     for col in D08_BLOCK:
         assert col in REGISTRY_COLUMNS
-    assert REGISTRY_COLUMNS[-5:] == D08_BLOCK               # the D08 block ends the schema
-    assert REGISTRY_COLUMNS[-6] == "trim_energy_stats_path"  # the D06 block still precedes it
+    # Direction 10 later appends a further five columns, so the D08 block is located by index
+    # rather than as the literal tail (no D08 column moved — the same no-column-moved
+    # guarantee, now aware of the D10 append; the D06->D08 precedent applied again).
+    start = REGISTRY_COLUMNS.index("policy")
+    assert REGISTRY_COLUMNS[start : start + 5] == D08_BLOCK
+    assert REGISTRY_COLUMNS[start - 1] == "trim_energy_stats_path"  # the D06 block still precedes it
     # base_width (D03) < domain (D05) < epsilon (D06) < policy (D08): appends never reorder.
     assert REGISTRY_COLUMNS.index("epsilon") < REGISTRY_COLUMNS.index("policy")
 

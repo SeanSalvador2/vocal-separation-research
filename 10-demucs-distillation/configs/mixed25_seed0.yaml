@@ -1,0 +1,12 @@
+# Direction 10 arm (MASTER_PLAN §4.1 run matrix): MIXED25 (75/25 MUSDB/FMA), seed 0 (1-seed
+# secondary). The mixing-ratio sensitivity probe: p_fma=0.25 vs the primary 0.5. p_fma is a
+# config-hash identity field, so this hashes distinctly from mixed_seed0 (same seed, ratio 0.5).
+base: base.yaml
+arm: mixed25
+loss: l1mag
+seed: 0
+budget_name: reduced
+data_source: mixed
+p_fma: 0.25                # 25% FMA pool probability per example (§4.1 sensitivity axis)
+pseudo_root: null
+pseudo_manifest: null

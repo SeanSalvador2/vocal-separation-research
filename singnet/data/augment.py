@@ -58,9 +58,14 @@ CHANNELSWAP_PROB = 0.5  #: UMX stereo channel swap probability (Direction 05)
 #: (id 5) is the Direction-08 chunk-start *policy* stream: the energy-/drop-/
 #: curriculum-weighted start draw pulls from it, so a non-uniform policy perturbs
 #: neither the augmentation streams nor (for ``uniform``) the ``sample`` stream — the
-#: shared-cell guarantee (MASTER_PLAN §4.1).
+#: shared-cell guarantee (MASTER_PLAN §4.1). ``pool`` (id 6) is the Direction-10
+#: pseudo-label pool-selection stream: :class:`singnet.data.pseudo.MixedPools` draws the
+#: Bernoulli(p_FMA) MUSDB-vs-FMA pool per example from it, so the pool draw perturbs none of
+#: the augmentation/sampling streams (each keyed by its own fixed id) — the pool-independence
+#: guarantee (MASTER_PLAN §4.1, D10). Appending an id leaves every existing stream byte-
+#: identical (each name maps to an unchanged integer), so no prior run's data order changes.
 STREAM_IDS: dict[str, int] = {
-    "sample": 0, "remix": 1, "gain": 2, "flip": 3, "channelswap": 4, "sampling": 5,
+    "sample": 0, "remix": 1, "gain": 2, "flip": 3, "channelswap": 4, "sampling": 5, "pool": 6,
 }
 
 

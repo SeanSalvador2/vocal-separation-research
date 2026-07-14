@@ -1,0 +1,9 @@
+# Direction 10 arm (MASTER_PLAN §4.1): CONTINGENCY (budget-gated): musdb_only under the sisdr
+# loss, seed 0. RUN LATER, only if Direction 01 flips the project default loss — then the
+# {musdb_only, mixed} pair is re-run once under sisdr to keep the gap-closure comparison on the
+# frozen loss. musdb-only carries no pseudo block (data_source canonicalizes away).
+base: base.yaml
+arm: musdb_only
+loss: sisdr                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced

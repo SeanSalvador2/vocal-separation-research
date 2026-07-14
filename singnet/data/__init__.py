@@ -33,6 +33,14 @@ from .profiles import (
     windowed_vocal_rms,
     write_energy_profiles,
 )
+from .pseudo import (
+    MixedPools,
+    MusdbShardLeak,
+    PseudoLabeledShards,
+    assert_not_under_musdb,
+    build_pseudo_dataset,
+    read_teacher_provenance,
+)
 from .sampling import POLICIES, ChunkSampler, build_chunk_sampler
 
 __all__ = [
@@ -64,4 +72,10 @@ __all__ = [
     "compute_energy_profiles",
     "write_energy_profiles",
     "load_energy_profiles",
+    "PseudoLabeledShards",
+    "MixedPools",
+    "MusdbShardLeak",
+    "assert_not_under_musdb",
+    "build_pseudo_dataset",
+    "read_teacher_provenance",
 ]

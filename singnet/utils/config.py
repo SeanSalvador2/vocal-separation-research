@@ -34,7 +34,13 @@ import yaml
 # excluded from the config hash so that resuming the same experiment on a
 # different machine (or writing its outputs elsewhere) does not change identity.
 _NON_IDENTITY_KEYS = frozenset(
-    {"gpu", "output_dir", "shard_root", "musdb_root", "registry_path", "num_workers"}
+    {
+        "gpu", "output_dir", "shard_root", "musdb_root", "registry_path", "num_workers",
+        # Direction-10 pseudo-shard *locations* (where the teacher labels live) — like
+        # shard_root, they describe where a run happens, not what was run, so they are
+        # excluded from the hash (the identity is `data_source` + `p_fma`; see below).
+        "pseudo_root", "pseudo_manifest",
+    }
 )
 
 #: The three factorized augmentation transforms (MASTER_PLAN §5), canonical order.
@@ -189,6 +195,54 @@ def sampling_policy(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+#: The three Direction-10 training-data sources (MASTER_PLAN §4.1).
+PSEUDO_SOURCES: tuple[str, ...] = ("musdb", "mixed", "distill")
+
+
+def pseudo_data_spec(config: dict[str, Any]) -> dict[str, Any] | None:
+    r"""Return the normalized ``{data_source, p_fma}`` pool spec, or ``None`` for musdb-only.
+
+    Reads a flat ``data_source`` (``musdb``/``mixed``/``distill``) + ``p_fma`` (Direction 10,
+    MASTER_PLAN §4.1), also accepting the canonical nested ``pseudo:`` block (for idempotency).
+    ``musdb`` (the default, or an absent key) returns ``None`` — **no pseudo data** — so a
+    musdb-only config canonicalizes to the shared baseline cell (its sixth reuse, §4.1). For
+    ``distill`` the pool is entirely FMA (``p_fma = 1.0``); for ``mixed`` ``p_fma`` is required
+    and must be strictly inside ``(0, 1)`` (``p_fma`` is a config-hash identity field, so
+    ``mixed`` and ``mixed25`` hash distinctly).
+    """
+    block = config.get("pseudo")
+    if isinstance(block, dict):
+        source = str(block.get("data_source", config.get("data_source", "musdb")))
+        p = block.get("p_fma", config.get("p_fma"))
+    else:
+        source = str(config.get("data_source", "musdb"))
+        p = config.get("p_fma")
+    if source not in PSEUDO_SOURCES:
+        raise ValueError(f"unknown data_source {source!r}; expected {PSEUDO_SOURCES}")
+    if source == "musdb":
+        return None
+    if source == "distill":
+        return {"data_source": "distill", "p_fma": 1.0}
+    if p is None:
+        raise ValueError("data_source 'mixed' requires a p_fma (the FMA pool probability, §4.1)")
+    p_fma = float(p)
+    if not (0.0 < p_fma < 1.0):
+        raise ValueError(f"mixed p_fma must be in (0, 1); got {p_fma!r}")
+    return {"data_source": "mixed", "p_fma": p_fma}
+
+
+def pseudo_paths(config: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Return ``(pseudo_root, pseudo_manifest)`` locations (non-identity; ``None`` if unset).
+
+    These are RUN-LATER Drive paths to the teacher-labeled shards + manifest; they are
+    excluded from the config hash (:data:`_NON_IDENTITY_KEYS`) so pointing a run at a
+    different Drive folder does not mint a new experiment identity.
+    """
+    root = config.get("pseudo_root")
+    manifest = config.get("pseudo_manifest")
+    return (str(root) if root is not None else None, str(manifest) if manifest is not None else None)
+
+
 def canonicalize_config(config: dict[str, Any]) -> dict[str, Any]:
     """Default-fill the augmentation + allowlist + corruption schema to canonical form.
 
@@ -244,6 +298,19 @@ def canonicalize_config(config: dict[str, Any]) -> dict[str, Any]:
         else:  # energy / curriculum
             block["floor_lambda"] = spec["floor_lambda"]
         cfg["sampling"] = block
+
+    # Direction-10 pseudo-label pool: `musdb` (or an absent block) canonicalizes to NO key —
+    # hash-identical to the shared baseline cell, so `musdb_only` is the sixth reuse of it
+    # (§4.1). A `mixed`/`distill` source becomes a canonical `{data_source, p_fma}` identity
+    # block; the flat data_source/p_fma keys and the non-identity pseudo_root/pseudo_manifest
+    # locations are removed. Every existing config carries none of these, so all prior hashes
+    # are unchanged.
+    pseudo = pseudo_data_spec(cfg)
+    cfg.pop("pseudo", None)
+    cfg.pop("data_source", None)
+    cfg.pop("p_fma", None)
+    if pseudo is not None:
+        cfg["pseudo"] = {"data_source": pseudo["data_source"], "p_fma": pseudo["p_fma"]}
     return cfg
 
 

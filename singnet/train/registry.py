@@ -11,7 +11,8 @@ Schema (exact column order)::
     aug_remix, aug_gain, aug_flip, n_songs, base_width,
     domain, recipe, rank, lr, trainable_params, trainable_share, peak_vram_gb,
     epsilon, trim_q, kept_fraction_observed, trim_energy_stats_path,
-    policy, theta_db, floor_lambda, silent_exposure_observed, best_val_slr
+    policy, theta_db, floor_lambda, silent_exposure_observed, best_val_slr,
+    data_source, p_fma, n_pseudo_clips, teacher_version, teacher_consistency_db
 
 The ``aug_*``/``n_songs`` block is the Direction-02 addition (MASTER_PLAN §6). The
 ``base_width`` is the Direction-03 addition (§5, §9): the chosen tower/decoder base
@@ -24,12 +25,18 @@ observed mean kept-fraction, and the per-run trim-telemetry CSV path. The final 
 (``policy``, ``theta_db``, ``floor_lambda``, ``silent_exposure_observed``,
 ``best_val_slr``) are the **Direction-08** addition (D08 MASTER_PLAN §6): the chunk-
 sampling policy, its θ/λ constants, the realized silent-chunk exposure fraction, and the
-SLR of the SI-SDR-best checkpoint (descriptive — never used for selection, §6). Every
-new column is **appended** so the schema stays backward-compatible: an older registry
-(without them) reads back NaN-filled, and runs that predate a column populate it with the
-identity default (the full recipe on 86 songs; ``base_width`` = 32; the D05 fields
-empty/NaN for the Directions 01-03 rows; the D06 fields empty/NaN for non-bleed runs; the
-D08 fields default to the ``uniform`` policy with NaN telemetry for the pre-D08 rows).
+SLR of the SI-SDR-best checkpoint (descriptive — never used for selection, §6). The final
+five (``data_source``, ``p_fma``, ``n_pseudo_clips``, ``teacher_version``,
+``teacher_consistency_db``) are the **Direction-10** addition (D10 MASTER_PLAN §5): the
+training-data source (``musdb``/``mixed``/``distill``), the FMA pool probability, the number
+of pseudo clips in the pool, the teacher package/model signature, and the recorded mean
+teacher 4-stem consistency residual (dB). Every new column is **appended** so the schema
+stays backward-compatible: an older registry (without them) reads back NaN-filled, and runs
+that predate a column populate it with the identity default (the full recipe on 86 songs;
+``base_width`` = 32; the D05 fields empty/NaN for the Directions 01-03 rows; the D06 fields
+empty/NaN for non-bleed runs; the D08 fields default to the ``uniform`` policy with NaN
+telemetry for the pre-D08 rows; the D10 fields default to ``data_source="musdb"`` with NaN
+pool/teacher telemetry for every pre-D10 row).
 """
 
 from __future__ import annotations
@@ -79,6 +86,12 @@ REGISTRY_COLUMNS: tuple[str, ...] = (
     "floor_lambda",
     "silent_exposure_observed",
     "best_val_slr",
+    # Direction-10 (teacher distillation / pseudo-label pools) additions — appended block, §5.
+    "data_source",
+    "p_fma",
+    "n_pseudo_clips",
+    "teacher_version",
+    "teacher_consistency_db",
 )
 
 
@@ -125,6 +138,12 @@ class RunRecord:
     floor_lambda: float = float("nan")
     silent_exposure_observed: float = float("nan")
     best_val_slr: float = float("nan")
+    # Direction-10 additions (pseudo-label pool + teacher metadata; defaults = "musdb-only").
+    data_source: str = "musdb"
+    p_fma: float = float("nan")
+    n_pseudo_clips: int = 0
+    teacher_version: str = ""
+    teacher_consistency_db: float = float("nan")
 
     def as_row(self) -> dict[str, Any]:
         return {f.name: getattr(self, f.name) for f in fields(self)}

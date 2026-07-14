@@ -1,0 +1,14 @@
+# Direction 10 arm (MASTER_PLAN §4.1 run matrix): MIXED (50/50 MUSDB + FMA-pseudo), seed 0
+# (3-seed primary cell). Each training example draws its pool Bernoulli(p_fma=0.5) from the
+# dedicated (seed,"pool",step) stream; chunks/remixes WITHIN that pool (real stems never mix
+# with pseudo-stems). Loss + recipe held fixed vs musdb_only — ONLY the data source differs.
+base: base.yaml
+arm: mixed
+loss: l1mag                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced
+data_source: mixed         # MUSDB + FMA-pseudo pool mix (§4.1)
+p_fma: 0.5                 # FMA pool probability per example (identity field)
+# RUN-LATER pseudo-shard locations (non-identity; written by scripts/teacher_label.py):
+pseudo_root: null          # teacher-labeled 2-stem FMA shards (SEPARATE root from shard_root)
+pseudo_manifest: null      # the committed FMA license/screen manifest

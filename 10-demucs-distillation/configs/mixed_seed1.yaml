@@ -1,0 +1,10 @@
+# Direction 10 arm (MASTER_PLAN §4.1 run matrix): MIXED (50/50), seed 1 (3-seed primary cell).
+base: base.yaml
+arm: mixed
+loss: l1mag
+seed: 1
+budget_name: reduced
+data_source: mixed
+p_fma: 0.5
+pseudo_root: null
+pseudo_manifest: null

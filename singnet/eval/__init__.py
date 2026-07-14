@@ -26,6 +26,11 @@ from .overlap_add import (
     raised_cosine_window,
     separate_track,
 )
+from .teacher_session import (
+    LazyDemucsTeacher,
+    TEST_SESSION_COLUMNS,
+    build_teacher_session,
+)
 
 __all__ = [
     "analysis_grid_hz",
@@ -46,4 +51,7 @@ __all__ = [
     "overlap_add",
     "raised_cosine_window",
     "separate_track",
+    "build_teacher_session",
+    "LazyDemucsTeacher",
+    "TEST_SESSION_COLUMNS",
 ]

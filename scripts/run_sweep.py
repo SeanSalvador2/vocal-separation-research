@@ -37,6 +37,11 @@ minutes).
     python scripts/run_sweep.py --direction 08 --stage reduced  # the 8 new sampling-policy runs (RUN LATER)
     python scripts/run_sweep.py --direction 08 --stage contingency  # 2 sisdr contingency runs (RUN LATER)
 
+    # Direction 10 — Demucs-as-teacher pseudo-label distillation
+    python scripts/run_sweep.py --direction 10 --dry-run        # CPU: data_source/p_fma/n_pseudo/guards
+    python scripts/run_sweep.py --direction 10 --stage reduced  # the 6 new mixed/distill runs (RUN LATER)
+    python scripts/run_sweep.py --direction 10 --stage contingency  # 2 sisdr contingency runs (RUN LATER)
+
 ``--dry-run`` (CPU, no GPU, no data) instantiates each config and prints the
 per-config summary that matters for that direction — the augmentation switchboard
 + subset size (Directions 01/02), the band edges, chosen width ``c`` and exact
@@ -85,6 +90,10 @@ DIRECTIONS: dict[str, dict[str, str]] = {
     "08": {
         "config_dir": "08-silence-leakage/configs",
         "registry": "08-silence-leakage/results/registry.csv",
+    },
+    "10": {
+        "config_dir": "10-demucs-distillation/configs",
+        "registry": "10-demucs-distillation/results/registry.csv",
     },
 }
 
@@ -155,6 +164,16 @@ D08_REDUCED = [
     "curriculum_seed0.yaml", "curriculum_seed1.yaml",
 ]
 D08_CONTINGENCY = ["contingency_uniform_sisdr_seed0.yaml", "contingency_energy_sisdr_seed0.yaml"]
+
+# Direction 10 launch lists (MASTER_PLAN §4.1 run matrix): 6 new runs. The `musdb_only` cell
+# is NOT here — it is the shared Direction-01 l1mag cell (config-hash-equal to base.yaml;
+# reused, not retrained, §4.1: "0 new runs" — the sixth reuse of a97d5400e994). The two
+# contingency runs are budget-gated (run only if Direction 01 flips the default loss).
+D10_REDUCED = [
+    "mixed_seed0.yaml", "mixed_seed1.yaml", "mixed_seed2.yaml",
+    "distill_only_seed0.yaml", "mixed25_seed0.yaml", "mixed_trim_seed0.yaml",
+]
+D10_CONTINGENCY = ["contingency_musdb_only_sisdr_seed0.yaml", "contingency_mixed_sisdr_seed0.yaml"]
 
 
 def _already_done(config_path: Path, registry: str) -> bool:
@@ -331,6 +350,15 @@ def configs_for(
         raise SystemExit(
             "direction 08 'full'/uniform cell is the shared Direction-01 l1mag cell (reused, "
             "not retrained, §4.2) — use --stage reduced or contingency."
+        )
+    if direction == "10":
+        if stage == "reduced":
+            return [config_dir / name for name in D10_REDUCED]
+        if stage == "contingency":
+            return [config_dir / name for name in D10_CONTINGENCY]
+        raise SystemExit(
+            "direction 10 'full'/musdb_only cell is the shared Direction-01 l1mag cell (reused, "
+            "not retrained, §4.1) — use --stage reduced or contingency."
         )
     # direction 02
     if stage == "reduced":
@@ -526,6 +554,71 @@ def dry_run_d08(config_paths: list[Path]) -> None:
           "(MASTER_PLAN §4.1/§4.2) before GPU spend.")
 
 
+def dry_run_d10(config_paths: list[Path]) -> None:
+    """Direction 10 dry-run: data_source / p_fma / n_pseudo / MUSDB-path guard per config (no GPU).
+
+    For each config prints the training-data source (musdb/mixed/distill), the FMA pool
+    probability p_fma, the pseudo clip count (from the manifest if present, else RUN LATER),
+    and the **MUSDB-path guard status** — that :class:`PseudoLabeledShards` structurally refuses
+    a MUSDB shard root — plus the config hash, so a mislabelled source/ratio or a leaked guard
+    is caught before any GPU spend (MASTER_PLAN §7 run book step 2). ``musdb_only`` is the
+    shared cell (0 new runs); the guard is exercised live on a MUSDB-like root.
+    """
+    from singnet.data.pseudo import MusdbShardLeak, PseudoLabeledShards
+    from singnet.utils.config import pseudo_data_spec, pseudo_paths
+
+    # exercise the guard once so the printed status is a real refusal, not a claim.
+    guard_ok = False
+    try:
+        PseudoLabeledShards("/tmp/fake_musdb_root", musdb_roots=("/tmp/fake_musdb_root",))
+    except MusdbShardLeak:
+        guard_ok = True
+
+    print(f"DRY RUN — direction 10: {len(config_paths)} configs (no training)\n")
+    print(f"MUSDB-path guard active (PseudoLabeledShards refuses a MUSDB root): {guard_ok}\n")
+    header = (f"{'config':<38} {'arm':<12} {'loss':<6} {'seed':<4} {'data_source':<12} "
+              f"{'p_fma':<6} {'n_pseudo':<20} {'guard':<22} hash")
+    print(header)
+    print("-" * len(header))
+    for path in config_paths:
+        if not path.exists():
+            print(f"{path.name:<38} MISSING")
+            continue
+        cfg = resolve_config(path)
+        spec = pseudo_data_spec(cfg)
+        data_source = "musdb" if spec is None else spec["data_source"]
+        p_fma = "—" if spec is None else f"{spec['p_fma']:.2f}"
+        root, manifest = pseudo_paths(cfg)
+        if spec is None:
+            n_pseudo = "n/a (musdb)"
+            guard = "n/a (no pseudo)"
+        else:
+            n_pseudo = _pseudo_count(manifest)
+            guard = "refuses MUSDB roots" if guard_ok else "LEAK! (no refusal)"
+        print(f"{path.name:<38} {str(cfg.get('arm','?')):<12} "
+              f"{str(cfg.get('loss', cfg.get('arm'))):<6} {str(cfg.get('seed','?')):<4} "
+              f"{data_source:<12} {p_fma:<6} {n_pseudo:<20} {guard:<22} {hash_config(cfg)}")
+    base = Path(DIRECTIONS['10']['config_dir']) / "base.yaml"
+    if base.exists():
+        print(f"\nshared musdb_only cell (= D01 l1mag) config-hash: {hash_config(resolve_config(base))}")
+    print("Verify data_source/p_fma per config; the musdb_only arm reuses the shared cell "
+          "and the pseudo pool refuses MUSDB shard paths (MASTER_PLAN §3.3/§4.1) before GPU spend.")
+
+
+def _pseudo_count(manifest_path: str | None) -> str:
+    """Human label for the pseudo clip count (from the manifest CSV if present, else RUN LATER)."""
+    if manifest_path is None or not Path(manifest_path).exists():
+        return "RUN LATER (label)"
+    try:
+        import pandas as pd
+
+        frame = pd.read_csv(manifest_path, comment="#")
+        screened = int(frame.get("screened", pd.Series(dtype=bool)).astype(bool).sum())
+        return f"{screened} screened"
+    except Exception:  # noqa: BLE001 — dry-run must never crash on a bad/absent manifest
+        return "pending (manifest?)"
+
+
 def dry_run(config_paths: list[Path], direction: str) -> None:
     """Instantiate each config's pipeline; print the switchboard + subset size (no GPU)."""
     if direction == "03":
@@ -539,6 +632,9 @@ def dry_run(config_paths: list[Path], direction: str) -> None:
         return
     if direction == "08":
         dry_run_d08(config_paths)
+        return
+    if direction == "10":
+        dry_run_d10(config_paths)
         return
     print(f"DRY RUN — direction {direction}: {len(config_paths)} configs (no training)\n")
     header = (f"{'config':<32} {'loss':<9} {'seed':<4} {'remix':<6} {'gain':<6} "
@@ -568,7 +664,7 @@ def dry_run(config_paths: list[Path], direction: str) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--direction", choices=["01", "02", "03", "05", "06", "08"], default="01",
+    parser.add_argument("--direction", choices=["01", "02", "03", "05", "06", "08", "10"], default="01",
                         help="which study to run")
     parser.add_argument("--stage", default="reduced",
                         choices=["reduced", "full", "contingency", "probes", "main"])

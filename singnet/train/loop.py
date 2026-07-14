@@ -342,6 +342,33 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
         track_allowlist=allowlist, pipeline=pipeline, length=total_steps * batch_size,
         corrupt=corruption, sampler=sampler, energy_profiles=energy_profiles, batch_size=batch_size,
     )
+    # Direction 10 §4.1: the training-data source. `musdb` (every Direction 01–08 config)
+    # leaves `train_ds` exactly as built above (byte-identical). `mixed`/`distill` build the
+    # FMA pseudo pool (MUSDB-refusing store) and either mix it in per-example (MixedPools, a
+    # dedicated pool stream that perturbs no augmentation stream) or train on it alone.
+    from ..data.pseudo import MixedPools, build_pseudo_dataset, read_teacher_provenance
+    from ..utils.config import pseudo_data_spec
+
+    pseudo = pseudo_data_spec(config)
+    data_source = "musdb" if pseudo is None else pseudo["data_source"]
+    p_fma_value = float("nan") if pseudo is None else pseudo["p_fma"]
+    n_pseudo_clips = 0
+    teacher_version, teacher_consistency_db = "", float("nan")
+    if pseudo is not None:
+        pseudo_ds = build_pseudo_dataset(
+            config, seed=seed, chunk_s=config.get("chunk_s", 6.0),
+            length=total_steps * batch_size, batch_size=batch_size, musdb_shard_root=shard_root,
+        )
+        n_pseudo_clips = pseudo_ds.n_songs
+        prov = read_teacher_provenance(config.get("pseudo_root") or "")
+        teacher_version = str(prov.get("model", "") or prov.get("demucs_version", ""))
+        teacher_consistency_db = float(prov.get("consistency_residual_db_mean", float("nan")))
+        if data_source == "distill":
+            train_ds = pseudo_ds  # FMA pseudo pool only (1 seed)
+        else:
+            train_ds = MixedPools(
+                train_ds, pseudo_ds, pseudo["p_fma"], seed, length=total_steps * batch_size
+            )
     loader = DataLoader(
         train_ds, batch_size=batch_size, shuffle=False, drop_last=True,
         num_workers=config.get("num_workers", 4),
@@ -476,6 +503,8 @@ def run(config_path: str | Path, *, registry_path: str | Path | None = None) -> 
             trim_energy_stats_path=trim_energy_stats_path,
             policy=spec["policy"], theta_db=policy_theta, floor_lambda=policy_lambda,
             silent_exposure_observed=silent_exposure_observed, best_val_slr=best_slr,
+            data_source=data_source, p_fma=p_fma_value, n_pseudo_clips=n_pseudo_clips,
+            teacher_version=teacher_version, teacher_consistency_db=teacher_consistency_db,
         ),
     )
     return RunResult(run_id, config_hash, step, best_val, final_val, skip_rate, str(best_path))

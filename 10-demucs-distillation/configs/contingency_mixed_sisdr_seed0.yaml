@@ -1,0 +1,12 @@
+# Direction 10 arm (MASTER_PLAN §4.1): CONTINGENCY (budget-gated): mixed (50/50) under the sisdr
+# loss, seed 0. RUN LATER, only if Direction 01 flips the project default loss. Paired with
+# contingency_musdb_only_sisdr_seed0 so the gap-closure Ĉ can be recomputed on the flipped loss.
+base: base.yaml
+arm: mixed
+loss: sisdr                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced
+data_source: mixed
+p_fma: 0.5
+pseudo_root: null
+pseudo_manifest: null

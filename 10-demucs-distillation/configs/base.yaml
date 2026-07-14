@@ -1,0 +1,46 @@
+# Direction 10 base config (MASTER_PLAN §4.1, §4.2, §5). This file is the SHARED
+# MUSDB-ONLY CELL: it mirrors Direction 01's base identity fields exactly (model SingNet-C1
+# at base_channels=32, l1mag loss, reduced budget, full augmentation recipe, 86-song split)
+# and carries NO `data_source`/`p_fma`/`pseudo` keys, so it is a musdb-only run and its config
+# hash is BIT-IDENTICAL to Direction 01's `l1mag_seed0_reduced` (a97d5400e994; and Directions
+# 02/03/06/08's base). That equality (asserted by tests/test_config_schema_d10.py, gate G0) is
+# why the `musdb_only` arm is *reused* from Direction 01 across the 3 seeds, never retrained
+# (§4.1: "0 new runs" — the sixth reuse of the shared cell).
+#
+# The mixed / distill arms inherit this file and add an OPTIONAL `data_source` (+ `p_fma`) and
+# the RUN-LATER pseudo-shard locations. Because the musdb-only cell carries none, it hashes
+# exactly as the old configs did (`data_source: musdb` canonicalizes to "no pseudo key"; §4.1).
+# Only ONE thing ever varies in this direction: the training-data source — everything else is
+# D01 §7.1 verbatim.
+
+# --- experiment identity (mirrors D01 base) ---
+arm: l1mag                 # the shared musdb-only cell IS the D01 l1mag run
+seed: 0
+budget_name: reduced       # label only; `steps` is the real budget
+loss_kwargs: {}
+
+# --- training budget & schedule (identical to D01 REDUCED) ---
+steps: 16000               # REDUCED budget (§1.3); FULL = 40000
+batch_size: 16
+chunk_s: 6.0
+sample_rate: 44100
+amp: true
+deterministic: false
+
+# --- model (fixed SingNet-C1) ---
+base_channels: 32          # 9,835,745 params
+
+# --- data pipeline (fixed across arms; full recipe on the 86-song split) ---
+augment: true              # per-source gain + sign flip (§4.2)
+remix: true                # cross-track vocals+accompaniment remixing (within-pool for mixed)
+
+# --- locations (set at data-prep / run time; RUN LATER) ---
+# The mixed/distill arms additionally read the teacher-labeled pseudo shards from
+# `pseudo_root` (written by scripts/teacher_label.py) — a SEPARATE root from `shard_root`
+# (PseudoLabeledShards structurally refuses a MUSDB shard path; §3.3).
+shard_root: null
+splits_csv: 01-loss-function-study/configs/splits.csv   # the shared frozen split (§4)
+registry_path: 10-demucs-distillation/results/registry.csv
+output_dir: checkpoints
+num_workers: 4
+gpu: ""

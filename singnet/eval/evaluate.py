@@ -282,12 +282,17 @@ def _cli(argv: list[str] | None = None) -> None:
     parser.add_argument("--slr", action="store_true",
                         help="Direction 08: also score SLR at θ ∈ {−50,−60,−70} for every system")
     parser.add_argument("--device", default="cpu")
-    parser.add_argument("--direction", default=None, choices=[None, "01", "02", "03", "05", "08"],
-                        help="Direction 05 routes --test-matrix to the PEFT test session")
+    parser.add_argument("--direction", default=None, choices=[None, "01", "02", "03", "05", "08", "10"],
+                        help="Direction 05 routes --test-matrix to the PEFT test session; "
+                             "Direction 10 routes --test-session to the teacher/student session")
     parser.add_argument("--test-matrix", action="store_true",
                         help="Direction 05: build the consolidated test-matrix CSV (RUN LATER)")
+    parser.add_argument("--test-session", action="store_true",
+                        help="Direction 10: build the consolidated teacher/student test session (RUN LATER)")
+    parser.add_argument("--include-teacher", action="store_true",
+                        help="Direction 10: score the htdemucs teacher anchor (lazy demucs, RUN LATER)")
     parser.add_argument("--registry", default="05-lora-source-separation/results/registry.csv",
-                        help="Direction 05 test-matrix: the completed-runs registry")
+                        help="Direction 05/10 test session: the completed-runs registry")
     args = parser.parse_args(argv)
 
     if args.direction == "05" and args.test_matrix:
@@ -298,6 +303,20 @@ def _cli(argv: list[str] | None = None) -> None:
             output_dir=args.output_dir, device=args.device,
         )
         print(frame.groupby(["recipe", "eval_set"])["sisdr_vocals_mean"].mean())
+        return
+
+    if args.direction == "10" and args.test_session:
+        from .teacher_session import build_teacher_session
+
+        registry = args.registry
+        if registry == "05-lora-source-separation/results/registry.csv":  # default -> D10 registry
+            registry = "10-demucs-distillation/results/registry.csv"
+        frame = build_teacher_session(
+            registry, shard_root=args.shard_root, splits_csv=args.splits_csv,
+            output_dir=args.output_dir, include_teacher=args.include_teacher, slr=args.slr,
+            device=args.device,
+        )
+        print(frame[["system", "sisdr_vocals_mean", "slr_m60", "is_teacher"]])
         return
 
     frame = evaluate(

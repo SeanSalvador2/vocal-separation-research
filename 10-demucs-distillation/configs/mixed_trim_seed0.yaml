@@ -1,0 +1,16 @@
+# Direction 10 arm (MASTER_PLAN §4.1 run matrix): MIXED_TRIM (mixed 50/50 + TrimmedLoss q=0.30),
+# seed 0 (1-seed exploratory, the Direction-06 cross-feed). Teacher error is *structured* target
+# corruption (THEORY §2); the trimmed loss — reused verbatim from Direction 06 via config — is
+# the cheap defense probe, keeping the lowest-loss (1-q) chunks per step. `arm` vs `loss` is
+# decoupled (arm=mixed_trim, loss=l1mag) as in D06; the `trim:` block wraps the base loss.
+base: base.yaml
+arm: mixed_trim
+loss: l1mag                # base loss; the trim wrapper is loss-agnostic (D06 §3.2)
+seed: 0
+budget_name: reduced
+data_source: mixed
+p_fma: 0.5
+trim:
+  q: 0.3                   # drop the top-q highest-loss chunks per step (ITLM; D06 §3.2)
+pseudo_root: null
+pseudo_manifest: null

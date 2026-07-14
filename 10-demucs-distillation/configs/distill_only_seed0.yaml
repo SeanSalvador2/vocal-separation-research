@@ -1,0 +1,12 @@
+# Direction 10 arm (MASTER_PLAN §4.1 run matrix): DISTILL-ONLY (FMA-pseudo 800 only), seed 0
+# (1-seed secondary). Can ~6.7 h of pseudo-labeled CC audio substitute for 86 real songs
+# end-to-end? The pool is entirely FMA (p_fma canonicalizes to 1.0 for distill); no MUSDB
+# training data enters. MUSDB val/test are untouched (evaluation is on MUSDB test only).
+base: base.yaml
+arm: distill_only
+loss: l1mag                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced
+data_source: distill       # FMA pseudo pool only (p_fma -> 1.0; §4.1)
+pseudo_root: null          # teacher-labeled 2-stem FMA shards (RUN LATER)
+pseudo_manifest: null
