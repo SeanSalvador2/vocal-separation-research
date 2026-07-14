@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from torch import Tensor
 
-from ._base import LossOutput, SeparationLoss, masked_magnitude
+from ._base import LossOutput, SeparationLoss, masked_magnitude, per_chunk_mean
 
 
 class L1MagLoss(SeparationLoss):
@@ -20,7 +20,10 @@ class L1MagLoss(SeparationLoss):
 
     needs_waveform = False
 
-    def _compute(self, mask, mix_mag, tgt_mag, mix_stft, tgt_wave, mix_wave) -> LossOutput:  # type: ignore[override]
+    def _compute(self, mask, mix_mag, tgt_mag, mix_stft, tgt_wave, mix_wave, *, reduce=True) -> LossOutput:  # type: ignore[override]
         est_mag: Tensor = masked_magnitude(mask, mix_mag)
-        loss = (est_mag - tgt_mag).abs().mean()
-        return loss, {}
+        err = (est_mag - tgt_mag).abs()
+        if reduce:
+            return err.mean(), {}
+        per_chunk = per_chunk_mean(err)
+        return per_chunk.mean(), {"per_chunk": per_chunk}

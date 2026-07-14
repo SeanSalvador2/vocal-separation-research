@@ -35,6 +35,7 @@ import torch
 from torch.utils.data import Dataset
 
 from .augment import AugmentPipeline
+from .corrupt import CORRUPTIBLE_SPLITS, EvalSplitCorruptionError, StemBleed
 from .manifest import Manifest
 
 DEFAULT_SR = 44100
@@ -141,6 +142,10 @@ class MusdbChunks(Dataset):
         pipeline: an explicit :class:`AugmentPipeline` switchboard; when given it
             is the authority on remix/gain/flip (the ``augment``/``remix`` bools
             are ignored) and it is re-bound to this dataset's ``seed``.
+        corrupt: optional :class:`singnet.data.StemBleed` applied at load time,
+            **before** augmentation, to every loaded track's stems (Direction 06
+            §3.1). Refused on non-``train`` splits (the structural eval-split
+            guard). ``None`` (the default) is the byte-identical uncorrupted path.
     """
 
     def __init__(
@@ -155,11 +160,21 @@ class MusdbChunks(Dataset):
         track_allowlist: list[str] | None = None,
         length: int | None = None,
         pipeline: AugmentPipeline | None = None,
+        corrupt: StemBleed | None = None,
     ) -> None:
         self.store = store
         self.seed = int(seed)
         self.sample_rate = int(store.sample_rate)
         self.chunk_len = int(round(chunk_s * self.sample_rate))
+
+        # Structural eval-split guard (§3.1): a corrupting dataset simply cannot be
+        # constructed on a non-train split — raised here, before any row is read.
+        if corrupt is not None and split not in CORRUPTIBLE_SPLITS:
+            raise EvalSplitCorruptionError(
+                f"stem-bleed corruption refuses split {split!r}; training targets "
+                f"only ({CORRUPTIBLE_SPLITS}). Validation/test stems are never corrupted."
+            )
+        self.corrupt = corrupt
 
         if pipeline is None:
             pipeline = AugmentPipeline(remix=bool(remix), gain=bool(augment), flip=bool(augment))
@@ -203,25 +218,51 @@ class MusdbChunks(Dataset):
     def _slice(self, padded: np.ndarray, start: int) -> np.ndarray:
         return padded[start : start + self.chunk_len].astype(np.float32)
 
+    def _sources(self, track: str) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+        """Return ``(raw, model)`` stems for ``track``.
+
+        ``raw`` is the clean stem dict from the store; ``model`` is its ε-bleed
+        corrupted view (:attr:`corrupt`) when configured, else ``raw`` itself. The
+        corruption is deterministic (no RNG), so returning both is free and the
+        augmentation streams are untouched. ``raw`` supplies the §5 accompaniment-
+        energy telemetry (the *uncorrupted* ⟨a⟩-energy); ``model`` supplies the
+        stems the network actually trains on.
+        """
+        raw = self.store.load_sources(track)
+        if self.corrupt is None:
+            return raw, raw
+        return raw, self.corrupt(raw)
+
     def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
         p = self.pipeline
 
-        # 1. Vocals: always-on sampler picks the track and the window.
+        # 1. Vocals: always-on sampler picks the track and the window. The stems
+        #    are ε-bleed corrupted at load (before augmentation, §3.1) when set.
         sample_rng = p.stream("sample", index)
         voc_track = str(sample_rng.choice(self.tracks))
-        voc_padded = self._prepare(self.store.load_sources(voc_track)["vocals"])
+        voc_raw, voc_sources = self._sources(voc_track)
+        voc_padded = self._prepare(voc_sources["vocals"])
         voc_start = self._start(voc_padded, sample_rng)
         vocals = self._slice(voc_padded, voc_start)
+
+        # §5 telemetry: the RAW same-track accompaniment energy at the vocal window
+        # — the ⟨a⟩-energy that sets how much ε·a bleeds into this chunk's target
+        # (ε- and augmentation-invariant, so a clean per-chunk cleanliness covariate
+        # the trimmer's selection is ranked against; MASTER_PLAN §5, §11 telemetry).
+        voc_acc_padded = self._prepare(voc_raw["accompaniment"])
+        voc_acc_start = min(voc_start, len(voc_acc_padded) - self.chunk_len)
+        acc_energy = float(np.mean(self._slice(voc_acc_padded, voc_acc_start).astype(np.float64) ** 2))
 
         # 2. Accompaniment: remixed from a separate track (remix stream), or the
         #    same track's accompaniment at the same window (true track mixture).
         if p.remix:
             remix_rng = p.stream("remix", index)
             acc_track = str(remix_rng.choice(self.tracks))
-            acc_padded = self._prepare(self.store.load_sources(acc_track)["accompaniment"])
+            _, acc_sources = self._sources(acc_track)
+            acc_padded = self._prepare(acc_sources["accompaniment"])
             acc_start = self._start(acc_padded, remix_rng)
         else:
-            acc_padded = self._prepare(self.store.load_sources(voc_track)["accompaniment"])
+            acc_padded = self._prepare(voc_sources["accompaniment"])
             acc_start = min(voc_start, len(acc_padded) - self.chunk_len)
         accompaniment = self._slice(acc_padded, acc_start)
 
@@ -234,6 +275,7 @@ class MusdbChunks(Dataset):
             "mixture": torch.from_numpy(np.ascontiguousarray(mixture)).float(),
             "vocals": torch.from_numpy(np.ascontiguousarray(sources["vocals"])).float(),
             "accompaniment": torch.from_numpy(np.ascontiguousarray(sources["accompaniment"])).float(),
+            "acc_energy": torch.tensor(acc_energy, dtype=torch.float32),
         }
 
 

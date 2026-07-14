@@ -133,8 +133,37 @@ def track_allowlist_path(config: dict[str, Any]) -> str | None:
     return str(flat) if flat is not None else None
 
 
+def corruption_epsilon(config: dict[str, Any]) -> float:
+    """Return the ε-bleed level from an optional ``corrupt:`` block (Direction 06 §3.1).
+
+    Reads ``corrupt.epsilon`` (a float in ``[0, 1]``); a missing block, an empty
+    block, or ``epsilon: 0`` all mean "no corruption" (ε = 0). ε is a
+    **config-hash identity field when present** (see :func:`canonicalize_config`):
+    ε = 0 canonicalizes to *no corruption* so the clean cell stays hash-identical
+    to Directions 01–05, while ε > 0 mints a distinct run.
+    """
+    block = config.get("corrupt")
+    if isinstance(block, dict):
+        return float(block.get("epsilon", 0.0) or 0.0)
+    return 0.0
+
+
+def trim_q(config: dict[str, Any]) -> float | None:
+    """Return the trimmed-loss fraction ``q`` from an optional ``trim:`` block (§3.2).
+
+    Reads ``trim.q``; ``None`` (block absent) means "no trimming" (the plain base
+    loss). ``q`` is a passthrough identity field — configs that differ only in
+    ``trim.q`` (e.g. ``trim30`` vs ``trim30_q10``) already hash distinctly, so no
+    special canonicalization is needed.
+    """
+    block = config.get("trim")
+    if isinstance(block, dict) and block.get("q") is not None:
+        return float(block["q"])
+    return None
+
+
 def canonicalize_config(config: dict[str, Any]) -> dict[str, Any]:
-    """Default-fill the augmentation + allowlist schema to a canonical form.
+    """Default-fill the augmentation + allowlist + corruption schema to canonical form.
 
     Returns a **copy** in which
 
@@ -143,9 +172,14 @@ def canonicalize_config(config: dict[str, Any]) -> dict[str, Any]:
     * the subset allowlist lives in a single flat ``track_allowlist_csv`` slot
       (``None`` for the full split) and any nested ``data.track_allowlist_csv``
       is removed,
+    * the Direction-06 ``corrupt`` block is normalized so ε = 0 (or an absent
+      block) leaves **no** corruption key — hash-identical to an uncorrupted
+      Directions 01–05 config — while ε > 0 becomes the canonical
+      ``{"epsilon": <float>}`` identity field,
 
-    and every other key is left untouched. This runs **before** hashing so that
-    a Direction-01 ``l1mag`` config and a Direction-02 ``full`` config hash equal
+    and every other key is left untouched (so the ``trim`` block and any Direction
+    05 keys pass straight through). This runs **before** hashing so that a
+    Direction-01 ``l1mag`` config and the Direction-06 clean cell hash equal
     (MASTER_PLAN §8 G0). It is idempotent.
     """
     cfg = copy.deepcopy(config)
@@ -160,6 +194,14 @@ def canonicalize_config(config: dict[str, Any]) -> dict[str, Any]:
             cfg.pop("data", None)
     cfg.pop("track_allowlist_csv", None)
     cfg["track_allowlist_csv"] = allowlist
+
+    # Direction-06 corruption: ε = 0 / absent -> no key (clean cell ≡ D01); ε > 0
+    # -> the canonical identity block. Existing configs carry no `corrupt` key, so
+    # this is a no-op for them and every prior hash is unchanged.
+    eps = corruption_epsilon(cfg)
+    cfg.pop("corrupt", None)
+    if eps != 0.0:
+        cfg["corrupt"] = {"epsilon": eps}
     return cfg
 
 

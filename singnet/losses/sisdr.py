@@ -48,7 +48,7 @@ class SiSdrLoss(SeparationLoss):
         self.eps = float(eps)
         self.silence_rms = float(silence_rms)
 
-    def _compute(self, mask, mix_mag, tgt_mag, mix_stft, tgt_wave, mix_wave) -> LossOutput:  # type: ignore[override]
+    def _compute(self, mask, mix_mag, tgt_mag, mix_stft, tgt_wave, mix_wave, *, reduce=True) -> LossOutput:  # type: ignore[override]
         if mix_stft is None or tgt_wave is None:
             raise ValueError("SiSdrLoss requires mix_stft and tgt_wave (waveform path).")
 
@@ -61,6 +61,22 @@ class SiSdrLoss(SeparationLoss):
         n_valid = int(valid.sum().item())
         skip_rate = 1.0 - (n_valid / n_total if n_total else 0.0)
 
+        aux = {
+            "skip_rate": skip_rate,
+            "n_skipped": float(n_total - n_valid),
+            "n_total": float(n_total),
+        }
+
+        if not reduce:
+            # Per-chunk contract (Direction 06 §3.2): negative SI-SDR for *every*
+            # chunk, fp32. A silent target has ‖v‖²≈eps, so its −SI-SDR is a large
+            # positive value — it surfaces as high loss and is trimmed away by
+            # construction; the reduce=True silence *skip* below is a separate
+            # mechanism kept byte-identical for the untrimmed arms.
+            per_chunk = -si_sdr_torch(est_wave, tgt_wave, eps=self.eps)  # (B,)
+            aux["per_chunk"] = per_chunk
+            return per_chunk.mean(), aux
+
         if n_valid > 0:
             # Index BEFORE computing SI-SDR so degenerate silent chunks never
             # enter the arithmetic (0 * inf would poison the mean).
@@ -70,9 +86,4 @@ class SiSdrLoss(SeparationLoss):
             # Whole batch silent: return a graph-connected zero (no update).
             loss = est_wave.sum() * 0.0
 
-        aux = {
-            "skip_rate": skip_rate,
-            "n_skipped": float(n_total - n_valid),
-            "n_total": float(n_total),
-        }
         return loss, aux

@@ -19,7 +19,7 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
-from ._base import LossOutput, SeparationLoss, masked_magnitude
+from ._base import LossOutput, SeparationLoss, masked_magnitude, per_chunk_mean
 
 EPS_LOG = 1e-5
 
@@ -33,9 +33,12 @@ class LogL1MagLoss(SeparationLoss):
         super().__init__()
         self.eps_log = float(eps_log)
 
-    def _compute(self, mask, mix_mag, tgt_mag, mix_stft, tgt_wave, mix_wave) -> LossOutput:  # type: ignore[override]
+    def _compute(self, mask, mix_mag, tgt_mag, mix_stft, tgt_wave, mix_wave, *, reduce=True) -> LossOutput:  # type: ignore[override]
         est_mag: Tensor = masked_magnitude(mask, mix_mag)
         log_est = torch.log(est_mag + self.eps_log)
         log_tgt = torch.log(tgt_mag + self.eps_log)
-        loss = (log_est - log_tgt).abs().mean()
-        return loss, {}
+        err = (log_est - log_tgt).abs()
+        if reduce:
+            return err.mean(), {}
+        per_chunk = per_chunk_mean(err)
+        return per_chunk.mean(), {"per_chunk": per_chunk}

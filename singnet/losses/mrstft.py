@@ -31,7 +31,7 @@ import torch
 from torch import Tensor, nn
 
 from ..audio.stft import DEFAULT_HOP, DEFAULT_N_FFT, STFT, apply_mask
-from ._base import LossOutput, SeparationLoss, masked_magnitude
+from ._base import LossOutput, SeparationLoss, masked_magnitude, per_chunk_mean
 
 EPS_LOG = 1e-5
 DEFAULT_FFT_SIZES = (1024, 2048, 512)
@@ -81,22 +81,30 @@ class MultiResolutionSTFTLoss(nn.Module):
         self.eps_log = float(eps_log)
 
     @staticmethod
-    def _spectral_convergence(tgt_mag: Tensor, est_mag: Tensor, eps: float = 1e-8) -> Tensor:
+    def _spectral_convergence(
+        tgt_mag: Tensor, est_mag: Tensor, eps: float = 1e-8, *, reduce: bool = True
+    ) -> Tensor:
         batch = tgt_mag.shape[0]
         diff = (tgt_mag - est_mag).reshape(batch, -1).norm(dim=1)
         ref = tgt_mag.reshape(batch, -1).norm(dim=1) + eps
-        return (diff / ref).mean()
+        ratio = diff / ref  # (B,)
+        return ratio.mean() if reduce else ratio
 
-    def _log_magnitude(self, tgt_mag: Tensor, est_mag: Tensor) -> Tensor:
-        return (torch.log(tgt_mag + self.eps_log) - torch.log(est_mag + self.eps_log)).abs().mean()
+    def _log_magnitude(self, tgt_mag: Tensor, est_mag: Tensor, *, reduce: bool = True) -> Tensor:
+        per_element = (
+            torch.log(tgt_mag + self.eps_log) - torch.log(est_mag + self.eps_log)
+        ).abs()
+        return per_element.mean() if reduce else per_element.flatten(1).mean(dim=1)
 
-    def forward(self, est_wave: Tensor, tgt_wave: Tensor) -> Tensor:
-        total = est_wave.new_zeros(())
+    def forward(self, est_wave: Tensor, tgt_wave: Tensor, *, reduce: bool = True) -> Tensor:
+        total = est_wave.new_zeros(()) if reduce else est_wave.new_zeros(est_wave.shape[0])
         for res in self.resolutions:
             est_mag = res.magnitude(est_wave)
             tgt_mag = res.magnitude(tgt_wave)
-            total = total + self._spectral_convergence(tgt_mag, est_mag) + self._log_magnitude(
-                tgt_mag, est_mag
+            total = (
+                total
+                + self._spectral_convergence(tgt_mag, est_mag, reduce=reduce)
+                + self._log_magnitude(tgt_mag, est_mag, reduce=reduce)
             )
         return total
 
@@ -120,13 +128,26 @@ class L1MrStftLoss(SeparationLoss):
         self.stft = STFT(n_fft=n_fft, hop=hop)
         self.mrstft = MultiResolutionSTFTLoss(fft_sizes, hop_sizes, win_sizes)
 
-    def _compute(self, mask, mix_mag, tgt_mag, mix_stft, tgt_wave, mix_wave) -> LossOutput:  # type: ignore[override]
+    def _compute(self, mask, mix_mag, tgt_mag, mix_stft, tgt_wave, mix_wave, *, reduce=True) -> LossOutput:  # type: ignore[override]
         if mix_stft is None or tgt_wave is None:
             raise ValueError("L1MrStftLoss requires mix_stft and tgt_wave (waveform path).")
 
-        l1 = (masked_magnitude(mask, mix_mag) - tgt_mag).abs().mean()
+        est_mag = masked_magnitude(mask, mix_mag)
         est_wave: Tensor = self.stft.inverse(apply_mask(mask, mix_stft), length=tgt_wave.shape[-1])
-        mr = self.mrstft(est_wave, tgt_wave)
-        loss = l1 + self.lam * mr
-        aux = {"l1_mag": float(l1.detach()), "mrstft": float(mr.detach())}
-        return loss, aux
+        if reduce:
+            l1 = (est_mag - tgt_mag).abs().mean()
+            mr = self.mrstft(est_wave, tgt_wave)
+            loss = l1 + self.lam * mr
+            aux = {"l1_mag": float(l1.detach()), "mrstft": float(mr.detach())}
+            return loss, aux
+
+        # reduce=False: the same L1 + λ·MR-STFT combination, unreduced over chunks.
+        l1_pc = per_chunk_mean((est_mag - tgt_mag).abs())              # (B,)
+        mr_pc = self.mrstft(est_wave, tgt_wave, reduce=False)          # (B,)
+        per_chunk = l1_pc + self.lam * mr_pc
+        aux = {
+            "l1_mag": float(l1_pc.mean().detach()),
+            "mrstft": float(mr_pc.mean().detach()),
+            "per_chunk": per_chunk,
+        }
+        return per_chunk.mean(), aux

@@ -10,6 +10,12 @@ from .augment import (
     random_sign_flip,
     remix,
 )
+from .corrupt import (
+    CORRUPTIBLE_SPLITS,
+    EvalSplitCorruptionError,
+    StemBleed,
+    build_corruption,
+)
 from .manifest import Manifest, TestRowError, load_manifest
 from .musdb_dataset import (
     DEFAULT_CHUNK_S,
@@ -29,6 +35,10 @@ __all__ = [
     "random_sign_flip",
     "random_channel_swap",
     "remix",
+    "StemBleed",
+    "build_corruption",
+    "EvalSplitCorruptionError",
+    "CORRUPTIBLE_SPLITS",
     "Manifest",
     "TestRowError",
     "load_manifest",

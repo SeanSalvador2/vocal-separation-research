@@ -2,7 +2,8 @@
 
 Every loss implements the *one uniform signature* (MASTER_PLAN §10):
 
-    forward(mask, mix_mag, tgt_mag, mix_stft, tgt_wave, mix_wave) -> (loss, aux)
+    forward(mask, mix_mag, tgt_mag, mix_stft, tgt_wave, mix_wave, *, reduce=True)
+        -> (loss, aux)
 
 * ``mask``     : predicted soft mask, ``(B, 2048, 256)`` in ``[0, 1]``.
 * ``mix_mag``  : mixture magnitude on the 2048 network bins, ``(B, 2048, 256)``.
@@ -14,23 +15,36 @@ Every loss implements the *one uniform signature* (MASTER_PLAN §10):
 * ``mix_wave`` : mixture waveform ``(B, L')``.
 
 Magnitude-only losses ignore the waveform arguments; waveform losses ignore
-none. ``aux`` is a dict of scalars for logging (e.g. ``skip_rate``).
+none. ``aux`` is a dict of logging values (e.g. ``skip_rate``).
+
+**Per-chunk contract extension (Direction 06 §3.2, backward-compatible).** The
+keyword-only ``reduce`` flag defaults to ``True`` — the historical behaviour, in
+which ``forward`` returns the batch-reduced scalar and the *same* ``aux`` it
+always did (so every Direction 01–05 loss test passes unmodified). With
+``reduce=False`` the loss additionally exposes an **unreduced, per-chunk**
+``(B,)`` tensor of losses in ``aux["per_chunk"]`` — differentiable and computed
+in the same fp32 region as the scalar — which :class:`singnet.losses.trimmed.
+TrimmedLoss` ranks to keep the lowest-loss chunks. The scalar returned under
+``reduce=False`` is ``per_chunk.mean()``; the default ``reduce=True`` path is
+byte-for-byte the pre-extension computation.
 
 All losses run their arithmetic in **float32 inside an autocast-disabled
 region** (MASTER_PLAN §6, §12): ``log`` and division near zero are unstable in
-fp16, so we pin fp32 regardless of the surrounding AMP context.
+fp16, so we pin fp32 regardless of the surrounding AMP context. The per-chunk
+vector is fp32 for the same reason (AMP interaction, MASTER_PLAN §11).
 """
 
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Any, Iterator
 
 import torch
 from torch import Tensor, nn
 
-# Type alias for the uniform loss return.
-LossOutput = tuple[Tensor, dict[str, float]]
+# Type alias for the uniform loss return. ``aux`` carries logging scalars and,
+# under ``reduce=False``, the differentiable ``per_chunk`` (B,) tensor.
+LossOutput = tuple[Tensor, dict[str, Any]]
 
 
 @contextmanager
@@ -74,6 +88,8 @@ class SeparationLoss(nn.Module):
         mix_stft: Tensor | None = None,
         tgt_wave: Tensor | None = None,
         mix_wave: Tensor | None = None,
+        *,
+        reduce: bool = True,
     ) -> LossOutput:
         with fp32_autocast_disabled():
             return self._compute(
@@ -83,6 +99,7 @@ class SeparationLoss(nn.Module):
                 None if mix_stft is None else mix_stft.to(torch.complex64),
                 None if tgt_wave is None else tgt_wave.float(),
                 None if mix_wave is None else mix_wave.float(),
+                reduce=reduce,
             )
 
     def _compute(
@@ -93,6 +110,8 @@ class SeparationLoss(nn.Module):
         mix_stft: Tensor | None,
         tgt_wave: Tensor | None,
         mix_wave: Tensor | None,
+        *,
+        reduce: bool = True,
     ) -> LossOutput:
         raise NotImplementedError
 
@@ -100,3 +119,13 @@ class SeparationLoss(nn.Module):
 def masked_magnitude(mask: Tensor, mix_mag: Tensor) -> Tensor:
     """Estimated source magnitude ``Ŝ_mag = M ⊙ |X|`` on the network bins."""
     return mask * mix_mag
+
+
+def per_chunk_mean(per_element: Tensor) -> Tensor:
+    """Mean a per-element error tensor over everything but the batch axis.
+
+    ``per_element`` is ``(B, …)``; the result is the ``(B,)`` per-chunk loss. Used
+    only on the ``reduce=False`` path, so the ``reduce=True`` scalar computation is
+    left byte-identical to each loss's historical expression.
+    """
+    return per_element.flatten(1).mean(dim=1)
