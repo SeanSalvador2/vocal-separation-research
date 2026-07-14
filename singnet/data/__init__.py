@@ -27,6 +27,13 @@ from .musdb_dataset import (
     WavShardStore,
     load_track_allowlist,
 )
+from .profiles import (
+    compute_energy_profiles,
+    load_energy_profiles,
+    windowed_vocal_rms,
+    write_energy_profiles,
+)
+from .sampling import POLICIES, ChunkSampler, build_chunk_sampler
 
 __all__ = [
     "AugmentPipeline",
@@ -50,4 +57,11 @@ __all__ = [
     "TrackStore",
     "WavShardStore",
     "load_track_allowlist",
+    "ChunkSampler",
+    "POLICIES",
+    "build_chunk_sampler",
+    "windowed_vocal_rms",
+    "compute_energy_profiles",
+    "write_energy_profiles",
+    "load_energy_profiles",
 ]

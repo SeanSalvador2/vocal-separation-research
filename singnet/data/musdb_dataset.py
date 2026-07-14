@@ -37,6 +37,7 @@ from torch.utils.data import Dataset
 from .augment import AugmentPipeline
 from .corrupt import CORRUPTIBLE_SPLITS, EvalSplitCorruptionError, StemBleed
 from .manifest import Manifest
+from .sampling import ChunkSampler
 
 DEFAULT_SR = 44100
 DEFAULT_CHUNK_S = 6.0
@@ -146,6 +147,17 @@ class MusdbChunks(Dataset):
             **before** augmentation, to every loaded track's stems (Direction 06
             §3.1). Refused on non-``train`` splits (the structural eval-split
             guard). ``None`` (the default) is the byte-identical uncorrupted path.
+        sampler: optional :class:`singnet.data.ChunkSampler` chunk-start policy
+            (Direction 08 §4.1). ``None`` / a ``uniform`` sampler both take the
+            byte-identical legacy path (sample-resolution ``rng.integers`` on the
+            ``sample``/``remix`` streams). A non-uniform policy draws the weighted
+            start from the dedicated ``sampling`` stream and **requires**
+            ``energy_profiles``.
+        energy_profiles: per-track windowed vocal-RMS profiles (:mod:`singnet.data.profiles`),
+            consumed only by a non-uniform ``sampler``; a missing track's profile is a
+            loud error pointing at the ``--write-energy-profiles`` prep pass.
+        batch_size: batch size, used only to map an item ``index`` to a training
+            ``step`` (``index // batch_size``) for ``curriculum``'s λ(t) schedule.
     """
 
     def __init__(
@@ -161,11 +173,19 @@ class MusdbChunks(Dataset):
         length: int | None = None,
         pipeline: AugmentPipeline | None = None,
         corrupt: StemBleed | None = None,
+        sampler: ChunkSampler | None = None,
+        energy_profiles: dict[str, np.ndarray] | None = None,
+        batch_size: int = 16,
     ) -> None:
         self.store = store
         self.seed = int(seed)
         self.sample_rate = int(store.sample_rate)
         self.chunk_len = int(round(chunk_s * self.sample_rate))
+        # Direction 08 §4.1: the chunk-start policy. Default `uniform` is the shared
+        # baseline cell — its draw path below is byte-identical to the pre-D08 loader.
+        self.sampler = sampler if sampler is not None else ChunkSampler("uniform")
+        self.energy_profiles = energy_profiles
+        self.batch_size = max(1, int(batch_size))
 
         # Structural eval-split guard (§3.1): a corrupting dataset simply cannot be
         # constructed on a non-train split — raised here, before any row is read.
@@ -215,6 +235,23 @@ class MusdbChunks(Dataset):
     def _start(self, padded: np.ndarray, rng: np.random.Generator) -> int:
         return int(rng.integers(0, len(padded) - self.chunk_len + 1))
 
+    def _profile_for(self, track: str) -> np.ndarray:
+        """The energy profile for ``track`` (a loud error if the prep pass is missing)."""
+        if self.energy_profiles is None or track not in self.energy_profiles:
+            raise ValueError(
+                f"sampling policy {self.sampler.policy!r} needs an energy profile for "
+                f"{track!r}, but none was loaded — run `scripts/prepare_data.py "
+                f"--write-energy-profiles --out <shard_root>` first (MASTER_PLAN §5)."
+            )
+        return self.energy_profiles[track]
+
+    def _policy_start(
+        self, padded: np.ndarray, track: str, rng: np.random.Generator, step: int
+    ) -> int:
+        """A non-uniform policy chunk start (weighted grid draw on the ``sampling`` stream)."""
+        n_starts = len(padded) - self.chunk_len + 1
+        return self.sampler.start(n_starts, self._profile_for(track), rng, step=step)
+
     def _slice(self, padded: np.ndarray, start: int) -> np.ndarray:
         return padded[start : start + self.chunk_len].astype(np.float32)
 
@@ -235,6 +272,14 @@ class MusdbChunks(Dataset):
 
     def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
         p = self.pipeline
+        # Direction 08 §4.1: `uniform` keeps the exact legacy draw (sample-resolution
+        # `rng.integers` on the sample/remix streams — bit-identical to the shared
+        # baseline cell). A non-uniform policy draws its weighted grid start from the
+        # dedicated `sampling` stream, so it perturbs no other stream; the curriculum
+        # schedule reads the training `step` (index // batch_size).
+        uniform = self.sampler.is_uniform()
+        policy_rng = None if uniform else p.stream("sampling", index)
+        step = index // self.batch_size
 
         # 1. Vocals: always-on sampler picks the track and the window. The stems
         #    are ε-bleed corrupted at load (before augmentation, §3.1) when set.
@@ -242,7 +287,11 @@ class MusdbChunks(Dataset):
         voc_track = str(sample_rng.choice(self.tracks))
         voc_raw, voc_sources = self._sources(voc_track)
         voc_padded = self._prepare(voc_sources["vocals"])
-        voc_start = self._start(voc_padded, sample_rng)
+        voc_start = (
+            self._start(voc_padded, sample_rng)
+            if uniform
+            else self._policy_start(voc_padded, voc_track, policy_rng, step)
+        )
         vocals = self._slice(voc_padded, voc_start)
 
         # §5 telemetry: the RAW same-track accompaniment energy at the vocal window
@@ -260,7 +309,13 @@ class MusdbChunks(Dataset):
             acc_track = str(remix_rng.choice(self.tracks))
             _, acc_sources = self._sources(acc_track)
             acc_padded = self._prepare(acc_sources["accompaniment"])
-            acc_start = self._start(acc_padded, remix_rng)
+            # §4.1: the remix partner's chunk is drawn by the *same* policy (a second
+            # draw off the shared `sampling` stream for the non-uniform arms).
+            acc_start = (
+                self._start(acc_padded, remix_rng)
+                if uniform
+                else self._policy_start(acc_padded, acc_track, policy_rng, step)
+            )
         else:
             acc_padded = self._prepare(voc_sources["accompaniment"])
             acc_start = min(voc_start, len(acc_padded) - self.chunk_len)

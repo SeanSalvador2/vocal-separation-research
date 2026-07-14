@@ -162,6 +162,33 @@ def trim_q(config: dict[str, Any]) -> float | None:
     return None
 
 
+#: The four chunk-sampling policies (Direction 08 §4.1) and their default constants.
+SAMPLING_POLICIES: tuple[str, ...] = ("uniform", "energy", "drop", "curriculum")
+SAMPLING_DEFAULTS: dict[str, Any] = {"policy": "uniform", "theta_db": -60.0, "floor_lambda": 0.1}
+
+
+def sampling_policy(config: dict[str, Any]) -> dict[str, Any]:
+    """Return the normalized ``{policy, theta_db, floor_lambda}`` sampling spec (§4.1).
+
+    An absent ``sampling:`` block (every Direction 01–06 config) is the ``uniform``
+    baseline; a block selects the policy and, optionally, its constants (``theta_db``
+    for ``drop``, ``floor_lambda`` for ``energy``/``curriculum``). The returned dict
+    always carries all three keys with defaults filled, so :class:`ChunkSampler`
+    construction and hashing both see one canonical shape.
+    """
+    block = config.get("sampling")
+    if not isinstance(block, dict):
+        return dict(SAMPLING_DEFAULTS)
+    policy = str(block.get("policy", SAMPLING_DEFAULTS["policy"]))
+    if policy not in SAMPLING_POLICIES:
+        raise ValueError(f"unknown sampling policy {policy!r}; expected {SAMPLING_POLICIES}")
+    return {
+        "policy": policy,
+        "theta_db": float(block.get("theta_db", SAMPLING_DEFAULTS["theta_db"])),
+        "floor_lambda": float(block.get("floor_lambda", SAMPLING_DEFAULTS["floor_lambda"])),
+    }
+
+
 def canonicalize_config(config: dict[str, Any]) -> dict[str, Any]:
     """Default-fill the augmentation + allowlist + corruption schema to canonical form.
 
@@ -202,6 +229,21 @@ def canonicalize_config(config: dict[str, Any]) -> dict[str, Any]:
     cfg.pop("corrupt", None)
     if eps != 0.0:
         cfg["corrupt"] = {"epsilon": eps}
+
+    # Direction-08 sampling: the `uniform` policy (or an absent block) canonicalizes to
+    # NO sampling key — hash-identical to the shared baseline cell, so the D08 uniform
+    # arm reuses D01 `l1mag` rather than retraining (§4.2). A non-uniform policy becomes
+    # a canonical identity block carrying only the fields that actually steer it (θ for
+    # `drop`, λ for `energy`/`curriculum`), so every existing hash is unchanged.
+    spec = sampling_policy(cfg)
+    cfg.pop("sampling", None)
+    if spec["policy"] != "uniform":
+        block: dict[str, Any] = {"policy": spec["policy"]}
+        if spec["policy"] == "drop":
+            block["theta_db"] = spec["theta_db"]
+        else:  # energy / curriculum
+            block["floor_lambda"] = spec["floor_lambda"]
+        cfg["sampling"] = block
     return cfg
 
 

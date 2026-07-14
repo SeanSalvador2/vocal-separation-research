@@ -54,8 +54,14 @@ CHANNELSWAP_PROB = 0.5  #: UMX stereo channel swap probability (Direction 05)
 #: not a factorized transform (MASTER_PLAN §3.1), and keeps its own stream so the
 #: three switchable transforms are cleanly independent of it. ``channelswap`` (id
 #: 4) is the Direction-05 stereo-only transform; adding it does not perturb the
-#: sample/remix/gain/flip streams (each is keyed by its own fixed id).
-STREAM_IDS: dict[str, int] = {"sample": 0, "remix": 1, "gain": 2, "flip": 3, "channelswap": 4}
+#: sample/remix/gain/flip streams (each is keyed by its own fixed id). ``sampling``
+#: (id 5) is the Direction-08 chunk-start *policy* stream: the energy-/drop-/
+#: curriculum-weighted start draw pulls from it, so a non-uniform policy perturbs
+#: neither the augmentation streams nor (for ``uniform``) the ``sample`` stream — the
+#: shared-cell guarantee (MASTER_PLAN §4.1).
+STREAM_IDS: dict[str, int] = {
+    "sample": 0, "remix": 1, "gain": 2, "flip": 3, "channelswap": 4, "sampling": 5,
+}
 
 
 def remix(vocals: np.ndarray, accompaniment: np.ndarray) -> Sources:
