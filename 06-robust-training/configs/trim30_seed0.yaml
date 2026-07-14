@@ -1,0 +1,10 @@
+# Direction 06 arm (MASTER_PLAN §3.3 run matrix): ε=0.30 bleed + trimmed loss q=0.30, seed 0 (3-seed defense cell).
+base: base.yaml
+arm: trim30
+loss: l1mag                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced
+corrupt:
+  epsilon: 0.3          # ṽ = v + εa, ã = (1−ε)a on TRAIN targets only (§3.1)
+trim:
+  q: 0.3                 # drop the top-q highest-loss chunks per step (ITLM, §3.2)

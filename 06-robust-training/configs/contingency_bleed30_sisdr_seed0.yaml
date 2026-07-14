@@ -1,0 +1,9 @@
+# Direction 06 arm (MASTER_PLAN §3.3 run matrix): CONTINGENCY: ε=0.30 bleed under sisdr, seed 0.
+# RUN LATER, budget-gated (§3.3): only if Direction 01's verdict flips the project default loss.
+base: base.yaml
+arm: bleed30
+loss: sisdr                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced
+corrupt:
+  epsilon: 0.3          # ṽ = v + εa, ã = (1−ε)a on TRAIN targets only (§3.1)

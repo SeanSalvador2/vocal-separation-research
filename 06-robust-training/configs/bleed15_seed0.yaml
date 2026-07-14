@@ -1,0 +1,8 @@
+# Direction 06 arm (MASTER_PLAN §3.3 run matrix): ε=0.15 bleed, seed 0 (dose-response middle point).
+base: base.yaml
+arm: bleed15
+loss: l1mag                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced
+corrupt:
+  epsilon: 0.15          # ṽ = v + εa, ã = (1−ε)a on TRAIN targets only (§3.1)

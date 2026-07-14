@@ -20,8 +20,13 @@ D05_BLOCK = ("domain", "recipe", "rank", "lr", "trainable_params", "trainable_sh
 def test_d05_columns_are_the_appended_tail() -> None:
     for col in D05_BLOCK:
         assert col in REGISTRY_COLUMNS
-    assert REGISTRY_COLUMNS[-7:] == D05_BLOCK
-    assert REGISTRY_COLUMNS[-8] == "base_width"  # the D03 append still precedes them
+    # The D05 block is a contiguous append after base_width. Direction 06 later
+    # appends a further four columns, so the block is located by index rather than
+    # asserted as the literal tail (no D05 column moved — the same no-column-moved
+    # guarantee, now aware of the D06 append).
+    start = REGISTRY_COLUMNS.index("domain")
+    assert REGISTRY_COLUMNS[start : start + 7] == D05_BLOCK
+    assert REGISTRY_COLUMNS[start - 1] == "base_width"  # the D03 append still precedes them
 
 
 def test_runrecord_roundtrips_peft_metadata(tmp_path) -> None:

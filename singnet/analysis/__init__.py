@@ -13,6 +13,13 @@ from .bandsplit import (
     ordered_chain_verdict,
     three_arm_sigma,
 )
+from .bleed import (
+    RecoveryResult,
+    measured_vs_predicted,
+    predicted_curve,
+    prediction_line,
+    recovery_fraction,
+)
 from .scaling import (
     FitResult,
     fit_log2,
@@ -30,4 +37,9 @@ __all__ = [
     "OrderedChainVerdict",
     "ordered_chain_verdict",
     "three_arm_sigma",
+    "prediction_line",
+    "predicted_curve",
+    "measured_vs_predicted",
+    "recovery_fraction",
+    "RecoveryResult",
 ]

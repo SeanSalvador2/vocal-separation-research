@@ -1,0 +1,9 @@
+# Direction 06 arm (MASTER_PLAN §3.3 run matrix): ε=0 (clean) + trimmed loss q=0.30, seed 0 (does-trimming-hurt-clean control).
+# NOTE: no `corrupt:` block -> ε=0; this measures the price of trimming on clean data (H-06b control).
+base: base.yaml
+arm: trim_clean
+loss: l1mag                # actual training loss (arm is the experimental id)
+seed: 0
+budget_name: reduced
+trim:
+  q: 0.3                 # drop the top-q highest-loss chunks per step (ITLM, §3.2)

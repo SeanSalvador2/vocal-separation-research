@@ -27,6 +27,11 @@ minutes).
     python scripts/run_sweep.py --direction 05 --stage probes   # generate + run the 12 LR probes (RUN LATER)
     python scripts/run_sweep.py --direction 05 --stage main     # the 12 fine-tune runs (RUN LATER)
 
+    # Direction 06 — robust training under stem bleed
+    python scripts/run_sweep.py --direction 06 --dry-run        # CPU: ε/q/eval-guard per config
+    python scripts/run_sweep.py --direction 06 --stage reduced  # the 10 new bleed/trim runs (RUN LATER)
+    python scripts/run_sweep.py --direction 06 --stage contingency  # 2 sisdr contingency runs (RUN LATER)
+
 ``--dry-run`` (CPU, no GPU, no data) instantiates each config and prints the
 per-config summary that matters for that direction — the augmentation switchboard
 + subset size (Directions 01/02), the band edges, chosen width ``c`` and exact
@@ -67,6 +72,10 @@ DIRECTIONS: dict[str, dict[str, str]] = {
     "05": {
         "config_dir": "05-lora-source-separation/configs",
         "registry": "05-lora-source-separation/results/registry.csv",
+    },
+    "06": {
+        "config_dir": "06-robust-training/configs",
+        "registry": "06-robust-training/results/registry.csv",
     },
 }
 
@@ -114,6 +123,18 @@ D05_PROBE_GRIDS = {
     "full": ("3.0e-5", "1.0e-4", "3.0e-4"),
 }
 D05_PROBE_RANK = {"head": "null", "lora4": "4", "lora16": "16", "full": "null"}
+
+# Direction 06 launch lists (MASTER_PLAN §3.3 run matrix): 10 new runs. The clean
+# (ε=0) cell is NOT here — it is the shared Direction-01 l1mag cell across all three
+# clean seeds (config-hash-equal to base.yaml; reused, not retrained, §3.3). The two
+# contingency runs are budget-gated (run only if Direction 01 flips the default loss).
+D06_REDUCED = [
+    "bleed05_seed0.yaml", "bleed15_seed0.yaml",
+    "bleed30_seed0.yaml", "bleed30_seed1.yaml", "bleed30_seed2.yaml",
+    "trim30_seed0.yaml", "trim30_seed1.yaml", "trim30_seed2.yaml",
+    "trim30_q10_seed0.yaml", "trim_clean_seed0.yaml",
+]
+D06_CONTINGENCY = ["contingency_bleed30_sisdr_seed0.yaml", "contingency_trim30_sisdr_seed0.yaml"]
 
 
 def _already_done(config_path: Path, registry: str) -> bool:
@@ -273,6 +294,15 @@ def configs_for(
         if stage == "contingency":
             return [config_dir / name for name in D03_CONTINGENCY]
         raise SystemExit("unknown stage for direction 03 (reduced|full|contingency)")
+    if direction == "06":
+        if stage == "reduced":
+            return [config_dir / name for name in D06_REDUCED]
+        if stage == "contingency":
+            return [config_dir / name for name in D06_CONTINGENCY]
+        raise SystemExit(
+            "direction 06 'full'/clean cell is the shared Direction-01 l1mag cell (reused, "
+            "not retrained, §3.3) — use --stage reduced or contingency."
+        )
     # direction 02
     if stage == "reduced":
         return [config_dir / name for name in D02_REDUCED]
@@ -381,6 +411,51 @@ def dry_run_d05(config_paths: list[Path]) -> None:
           "Verify recipe/rank/LR match MASTER_PLAN §3.1/§3.4 before GPU spend.")
 
 
+def dry_run_d06(config_paths: list[Path]) -> None:
+    """Direction 06 dry-run: ε / q / eval-guard status per config (no GPU, no data).
+
+    For each config prints the bleed level ε (data path), the trim fraction q (loss
+    path), and the **eval-guard status** — that ``build_corruption`` structurally
+    refuses ``valid``/``test`` for every ε > 0 arm — plus the trimmed loss the loop
+    would build and the config hash, so a mislabelled ε/q or a leaked guard is caught
+    before any GPU spend (MASTER_PLAN §7 run book step 1).
+    """
+    from singnet.data.corrupt import EvalSplitCorruptionError, build_corruption
+    from singnet.losses import TrimmedLoss
+    from singnet.train import build_training_loss
+    from singnet.utils.config import corruption_epsilon, trim_q
+
+    print(f"DRY RUN — direction 06: {len(config_paths)} configs (no training)\n")
+    header = (f"{'config':<34} {'arm':<12} {'loss':<6} {'seed':<4} {'eps':<5} {'q':<5} "
+              f"{'trimmed':<8} {'eval-guard':<22} hash")
+    print(header)
+    print("-" * len(header))
+    for path in config_paths:
+        if not path.exists():
+            print(f"{path.name:<34} MISSING")
+            continue
+        cfg = resolve_config(path)
+        eps = corruption_epsilon(cfg)
+        q = trim_q(cfg)
+        trimmed = isinstance(build_training_loss(cfg), TrimmedLoss)
+        if eps > 0.0:
+            try:  # the guard MUST refuse a non-train split when ε > 0
+                build_corruption(cfg.get("corrupt"), "valid")
+                guard = "LEAK! (no refusal)"
+            except EvalSplitCorruptionError:
+                guard = "refuses valid/test"
+        else:
+            guard = "n/a (clean ε=0)"
+        print(f"{path.name:<34} {str(cfg.get('arm','?')):<12} "
+              f"{str(cfg.get('loss', cfg.get('arm'))):<6} {str(cfg.get('seed','?')):<4} "
+              f"{str(eps):<5} {str(q):<5} {str(trimmed):<8} {guard:<22} {hash_config(cfg)}")
+    base = Path(DIRECTIONS['06']['config_dir']) / "base.yaml"
+    if base.exists():
+        print(f"\nshared clean cell (ε=0, = D01 l1mag) config-hash: {hash_config(resolve_config(base))}")
+    print("Verify ε/q per config and that every ε>0 arm refuses the eval splits "
+          "(MASTER_PLAN §3.1/§3.2) before GPU spend.")
+
+
 def dry_run(config_paths: list[Path], direction: str) -> None:
     """Instantiate each config's pipeline; print the switchboard + subset size (no GPU)."""
     if direction == "03":
@@ -388,6 +463,9 @@ def dry_run(config_paths: list[Path], direction: str) -> None:
         return
     if direction == "05":
         dry_run_d05(config_paths)
+        return
+    if direction == "06":
+        dry_run_d06(config_paths)
         return
     print(f"DRY RUN — direction {direction}: {len(config_paths)} configs (no training)\n")
     header = (f"{'config':<32} {'loss':<9} {'seed':<4} {'remix':<6} {'gain':<6} "
@@ -417,7 +495,7 @@ def dry_run(config_paths: list[Path], direction: str) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--direction", choices=["01", "02", "03", "05"], default="01",
+    parser.add_argument("--direction", choices=["01", "02", "03", "05", "06"], default="01",
                         help="which study to run")
     parser.add_argument("--stage", default="reduced",
                         choices=["reduced", "full", "contingency", "probes", "main"])

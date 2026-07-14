@@ -9,19 +9,22 @@ Schema (exact column order)::
     run_id, arm, seed, budget, config_hash, git_commit, gpu, wall_clock_h,
     steps_done, best_val_sisdr, final_val_sisdr, sisdr_skip_rate, checkpoint_path,
     aug_remix, aug_gain, aug_flip, n_songs, base_width,
-    domain, recipe, rank, lr, trainable_params, trainable_share, peak_vram_gb
+    domain, recipe, rank, lr, trainable_params, trainable_share, peak_vram_gb,
+    epsilon, trim_q, kept_fraction_observed, trim_energy_stats_path
 
 The ``aug_*``/``n_songs`` block is the Direction-02 addition (MASTER_PLAN §6). The
 ``base_width`` is the Direction-03 addition (§5, §9): the chosen tower/decoder base
-width ``c`` recorded per run. The final seven columns (``domain`` … ``peak_vram_gb``)
-are the **Direction-05** addition (D05 MASTER_PLAN §5): the domain (``t1_aac64`` /
-``t2_noise12db`` / ``standard``), the PEFT recipe (``zeroshot``/``head``/``lora4``/
-``lora16``/``full``), the LoRA rank, the (probe-frozen) learning rate, and the trained
-parameter count / share / peak VRAM per run. Every new column is **appended** so the
-schema stays backward-compatible: an older registry (without them) reads back
-NaN-filled, and runs that predate a column populate it with the identity default (the
-full recipe on 86 songs; ``base_width`` = 32; the D05 fields default empty/NaN for the
-Directions 01-03 rows, which are not PEFT runs).
+width ``c`` recorded per run. The seven columns (``domain`` … ``peak_vram_gb``)
+are the **Direction-05** addition (D05 MASTER_PLAN §5): the domain, PEFT recipe, LoRA
+rank, (probe-frozen) learning rate, and the trained parameter count / share / peak
+VRAM. The final four (``epsilon``, ``trim_q``, ``kept_fraction_observed``,
+``trim_energy_stats_path``) are the **Direction-06** addition (D06 MASTER_PLAN §5): the
+stem-bleed level ε, the trimmed-loss fraction q, the observed mean kept-fraction, and
+the per-run trim-telemetry CSV path. Every new column is **appended** so the schema
+stays backward-compatible: an older registry (without them) reads back NaN-filled, and
+runs that predate a column populate it with the identity default (the full recipe on 86
+songs; ``base_width`` = 32; the D05 fields empty/NaN for the Directions 01-03 rows; the
+D06 fields empty/NaN for non-bleed runs).
 """
 
 from __future__ import annotations
@@ -60,6 +63,11 @@ REGISTRY_COLUMNS: tuple[str, ...] = (
     "trainable_params",
     "trainable_share",
     "peak_vram_gb",
+    # Direction-06 (robust training under stem bleed) additions — appended block, §5.
+    "epsilon",
+    "trim_q",
+    "kept_fraction_observed",
+    "trim_energy_stats_path",
 )
 
 
@@ -95,6 +103,11 @@ class RunRecord:
     trainable_params: int = 0
     trainable_share: float = float("nan")
     peak_vram_gb: float = float("nan")
+    # Direction-06 additions (robust-training metadata; defaults = "not a bleed run").
+    epsilon: float = float("nan")
+    trim_q: float = float("nan")
+    kept_fraction_observed: float = float("nan")
+    trim_energy_stats_path: str = ""
 
     def as_row(self) -> dict[str, Any]:
         return {f.name: getattr(self, f.name) for f in fields(self)}

@@ -19,17 +19,22 @@ def test_new_columns_are_in_the_schema() -> None:
         assert col in REGISTRY_COLUMNS
     # The four D02 columns are appended as a contiguous block after the original
     # Direction-01 schema (no existing column position changed). Direction 03
-    # appends base_width after them, and Direction 05 appends a further seven
-    # (domain … peak_vram_gb) — each still a backward-compatible append.
+    # appends base_width after them, Direction 05 appends a further seven
+    # (domain … peak_vram_gb), and Direction 06 appends a final four
+    # (epsilon … trim_energy_stats_path) — each still a backward-compatible append.
     d02_block = ("aug_remix", "aug_gain", "aug_flip", "n_songs")
     start = REGISTRY_COLUMNS.index("aug_remix")
     assert REGISTRY_COLUMNS[start : start + 4] == d02_block
     assert REGISTRY_COLUMNS[start + 4] == "base_width"  # the Direction-03 append
-    # the Direction-05 block follows base_width, ending the schema.
-    assert REGISTRY_COLUMNS[start + 5 :] == (
+    # the Direction-05 block follows base_width.
+    assert REGISTRY_COLUMNS[start + 5 : start + 12] == (
         "domain", "recipe", "rank", "lr", "trainable_params", "trainable_share", "peak_vram_gb",
     )
-    assert REGISTRY_COLUMNS[-1] == "peak_vram_gb"
+    # the Direction-06 block follows the D05 block, ending the schema.
+    assert REGISTRY_COLUMNS[start + 12 :] == (
+        "epsilon", "trim_q", "kept_fraction_observed", "trim_energy_stats_path",
+    )
+    assert REGISTRY_COLUMNS[-1] == "trim_energy_stats_path"
 
 
 def test_runrecord_roundtrips_switchboard(tmp_path) -> None:
