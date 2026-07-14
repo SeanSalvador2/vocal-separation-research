@@ -1,0 +1,208 @@
+\documentclass[11pt]{article}
+
+% Standalone mirror of ../THEORY.md. amsmath/amssymb only; no external figures,
+% no external packages, so it compiles with a bare LaTeX installation.
+% (Compile-untested in the build environment; written to compile with pdflatex.)
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\DeclareMathOperator{\iSTFT}{iSTFT}
+\DeclareMathOperator{\softmax}{softmax}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\SE}{SE}
+\DeclareMathOperator{\ND}{ND}
+\newcommand{\norm}[1]{\lVert #1 \rVert}
+\newcommand{\vhatT}{\hat v_T}
+\newcommand{\ahatT}{\hat a_T}
+\newcommand{\sbase}{s_{\text{base}}}
+\newcommand{\smix}{s_{\text{mix}}}
+\newcommand{\sT}{s_T}
+\newcommand{\pfma}{p_{\text{FMA}}}
+\newcommand{\Chat}{\hat C}
+
+\title{Theory Notes --- Direction 10:\\
+Demucs as Teacher --- What a Teacher's Labels Can and Cannot Buy a Compact Student}
+\author{SingNet project}
+\date{Frozen 2026-07-13}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note derives the mathematics implemented in \code{singnet/\{data,analysis\}/} and
+\code{scripts/\{prepare\_fma,teacher\_label\}.py} for Direction 10: pseudo-label distillation
+of a big hybrid-waveform teacher (\code{htdemucs}) into a compact spectrogram-mask student on
+license-safe unlabeled FMA audio. The crux is the quartet (\S1,\,\S2,\,\S4,\,\S5): \S1 derives
+why the distillation \emph{temperature} has no regression analogue and why hard pseudo-labels
+with the unchanged loss are the honest way to isolate the data effect; \S2 is the formal bridge
+to Direction 06 --- teacher error as \emph{structured} target corruption, and exactly what D06's
+dose--response chart does and does not license; \S4 defines the gap-closure estimand $\Chat$, its
+delta-method CI (reusing D06's tested \code{recovery\_fraction}), and its non-claims; \S5 is the
+license formalism whose ND-exclusion is load-bearing.
+\end{abstract}
+
+Notation. True (latent) vocal $v$, accompaniment $a$, mixture $x=v+a$. The compact \textbf{student}
+predicts a mask $M\in[0,1]^{F\times T}$, $\hat v_S=\iSTFT(M\odot|X|\,e^{i\angle X})$. The
+\textbf{teacher} (\code{htdemucs}) outputs $\vhatT$; on an unlabeled FMA clip the student's target
+is $\vhatT$ (an ordinary \code{l1mag} target) with accompaniment $\ahatT:=x-\vhatT$. Teacher
+residual $r:=\vhatT-v$. On MUSDB test: $\sbase,\smix$ are the 3-seed means of \code{musdb\_only},
+\code{mixed}; $\sT$ the teacher's score; gap $G=\sT-\sbase$; closure $\Chat=(\smix-\sbase)/G$; FMA
+pool probability $\pfma$.
+
+\section{Distillation \& pseudo-labeling, honestly taxonomized}
+
+\paragraph{Hinton KD.} Classification KD softens logits $z_i$ into a categorical target,
+$p_i(T)=\exp(z_i/T)/\sum_j\exp(z_j/T)$, with loss $(1-\lambda)\mathcal L_{\text{hard}}+\lambda
+T^2\mathcal L_{\text{soft}}$. Temperature $T$ flattens the simplex, exposing ``dark knowledge'';
+$T^2$ rebalances the soft-gradient magnitude.
+
+\paragraph{No regression analogue (derived).} Temperature is a property of the softmax on a finite
+simplex. (i) The teacher output $\vhatT\in\mathbb R^{F\times T}$ is not a normalized distribution:
+there is no partition function $\sum_j\exp(z_j/T)$ and no inter-class mass to redistribute. (ii)
+$T$ preserves the $\arg\max$ while moving probability mass; the regression target is the value
+$\vhatT$ itself, and $\softmax(z/T)$ has fixed endpoints (uniform as $T\to\infty$, one-hot as
+$T\to0$) that the raw value $\vhatT$ lacks --- there is no mass to move while fixing a decision,
+because there is no decision and no mass. Hence
+\[
+\boxed{\ \text{what survives KD in regression is only the teacher's output as a target: pseudo-labeling.}\ }
+\]
+The closest cousins to $T$ (\emph{analogy, not identity}) are the continuous output itself,
+spectral dynamic-range compression (reshapes loss geometry, not a class law), and the $\lambda$
+soft/hard mix --- the last transfers, realized as the pool ratio $\pfma$ (\S4).
+
+\paragraph{Data-effect isolation.} The three arms differ in exactly one factor, the training-data
+source (architecture, $\mathcal L_{\ell1\text{mag}}$, augmentation, budget all fixed), so
+$\smix-\sbase$ is attributable to the data. Pseudo-labels enter as \textbf{hard} targets: the
+teacher's point output $\vhatT$ is the ordinary \code{l1mag} target. A distillation-specific
+objective (feature matching, mask-space KD) would add a second changed factor and render
+$\smix-\sbase$ unidentifiable (``more data'' confounded with ``new loss''). Isolating the data
+effect is prerequisite to any later claim that a fancier objective adds value.\hfill$\blacksquare$
+
+\section{Teacher error as structured corruption --- the Direction-06 bridge}
+
+\paragraph{Additive target corruption.} On FMA the student trains on $(x,\vhatT)$ with
+$\vhatT=v+r$ --- exactly the shape of D06's $\tilde v=v+\varepsilon a$ (true source $+$ additive
+corruption). D06's result (an $\ell_1$-mag model that fits a corrupted target reproduces the
+corruption) transfers: a student that fits $\vhatT$ \textbf{inherits the teacher's error} $r$.
+
+\paragraph{But $r$ is structured.} Decompose $r=\alpha a+\beta v+r_\perp$ with $\alpha,\beta$
+content-dependent and \emph{signed}. D06's bleed is the special case $\alpha=\varepsilon$ constant,
+$\beta=0$, $r_\perp=0$. Teacher error differs in three ways: content-correlated (not a fixed
+multiple of $a$), level-varying (not constant $\varepsilon$), and two-way ($\beta\neq0$: leakage
+\emph{in} and vocal removal \emph{out}). This extra structure makes it a harder corruption than
+uniform bleed.
+
+\paragraph{What D06's chart (does not) license.} D06's prediction line $P(\varepsilon)$ is the
+closed-form clean SI-SDR of a model that perfectly learns $\tilde v=v+\varepsilon a$, valid because
+the corruption is a \emph{known} multiple of $a$. It does \textbf{not} give a numeric prediction
+for $\smix$ (the $-20\log_{10}\varepsilon$ slope needs $\tilde v-v=\varepsilon a$ with only
+$a_\perp$ as noise; $r$'s content-varying, two-way structure breaks that). It \textbf{does} license
+(i) the qualitative mechanism (fit-the-target $\Rightarrow$ inherit-the-error) and (ii) a coarse
+magnitude anchor via an effective bleed $\varepsilon_{\text{eff}}^2\norm{a_\perp}^2\approx
+\norm{r_\perp}^2$, flagged as order-of-magnitude only.
+
+\paragraph{Mixed re-enters ITLM's regime.} Under \emph{uniform} bleed every target is corrupted, so
+ITLM's ``clean subset exists'' premise fails (D06 ran the trick outside its regime). Under
+\textbf{mixed} training a fraction $1-\pfma$ of each batch is real MUSDB labels --- genuinely clean
+and pool-identifiable --- so the trimmed loss (\code{mixed\_trim}, reused from D06 via config) keeps
+the lowest-loss $\lceil(1-q)B\rceil$ chunks: if teacher error behaves like bleed, corrupted FMA
+chunks carry the higher irreducible loss and are preferentially dropped:
+\[
+\boxed{\ \text{if teacher error behaves like bleed: the dropped set is FMA-enriched.}\ }
+\]
+\code{MixedPools} threads the pool identity (\code{pool\_is\_fma}) so this is observable in the D06
+trim telemetry; a pool-agnostic dropped set means trimming buys nothing (\code{mixed\_trim}$\approx$
+\code{mixed}) --- the honest null, with a mechanism.
+
+\section{Domain shift and why within-pool remix is mandatory}
+
+FMA (CC indie, 30-s clips) differs from MUSDB in both the covariate ($x$: genre/production) and the
+label (via teacher error $r$, worse where FMA is OOD for the teacher); the two compound. Remix of
+vocals$_i$ with accompaniment$_j$ must stay \emph{within} a pool: cross-pool remix (MUSDB vocals
+$\times$ FMA accompaniment) synthesizes a chimeric mixture belonging to neither domain's statistics,
+a pure artifact. Within-pool remix keeps $x'=g_v v_i+g_a a_j$ a draw from that pool's product-of-
+marginals without domain crossing; \code{MixedPools} gives each pool its own augmentation over its
+own tracks, so cross-pool remix cannot occur \emph{by construction}. The 30-s clip boundary is
+negligible: a clip admits $24$ s of valid 6-s starts ($80\%$), no chunk crosses a boundary, and the
+$\sim10\times$ fewer starts per clip ($\approx24$ vs $\approx234$ for a 4-min track) are offset by
+$800$ clips vs $86$ tracks --- comparable total distinct-chunk counts
+($\approx1.9\times10^4$ vs $2.0\times10^4$).\hfill$\blacksquare$
+
+\section{The gap-closure estimand $\Chat$}
+
+\paragraph{Definition.} On MUSDB test,
+\[
+\boxed{\ \Chat=\frac{\smix-\sbase}{\sT-\sbase}=\frac{u}{d},\quad u=\smix-\sbase,\ d=G=\sT-\sbase.\ }
+\]
+The denominator is the teacher's own test score --- the product-relevant ceiling (\code{htdemucs} is
+the shipped engine). \emph{Stated honestly:} the teacher saw MUSDB \emph{train}, so $\sT$ on MUSDB
+test is an optimistic ceiling; the student never sees MUSDB test through any path (the pseudo pool
+refuses MUSDB roots, \S5 of the plan).
+
+\paragraph{Delta-method CI.} With $\sbase,\smix$ 3-seed means and $\sT$ deterministic,
+\[
+\frac{\partial\Chat}{\partial\smix}=\frac1d,\quad
+\frac{\partial\Chat}{\partial\sT}=-\frac{u}{d^2},\quad
+\frac{\partial\Chat}{\partial\sbase}=\frac{u-d}{d^2},
+\]
+\[
+\widehat{\Var}(\Chat)\approx\Big(\tfrac1d\Big)^2\Var(\smix)+\Big(\tfrac{u}{d^2}\Big)^2\Var(\sT)
++\Big(\tfrac{u-d}{d^2}\Big)^2\Var(\sbase),\qquad \Chat\pm z\,\SE(\Chat).
+\]
+This linearization is \emph{identical} to D06's recovery fraction under the map (clean$\to\sT$,
+bleed$\to\sbase$, trim$\to\smix$), so $\Chat$ reuses \code{recovery\_fraction} verbatim, including
+its ``not-evaluable when $d\le0$'' guard (the precondition gate, \S6). Each $\Var(s_\cdot)$ combines
+a seed term ($\sigma^2/3$; $0$ for $\sT$) and a paired-track term; because the three scores are
+paired over the 50 tracks, the \emph{primary} CI is a paired bootstrap over tracks (respecting the
+covariance the independent-cell delta method drops), with the delta-method CI as its closed-form
+companion.
+
+\paragraph{Non-claims.} $\Chat\ge0.25$ does not claim the student approaches the teacher \emph{off}
+MUSDB (the teacher's MUSDB-train exposure inflates $\sT$ there); $\Chat$ is a fraction of a specific
+gap on a frozen protocol, ill-conditioned if $G$ is small (forbidden by the $G>2$ dB gate); and by
+\S1 it attributes the closure to teacher-labeled \emph{data}, not a distillation mechanism.
+
+\section{License formalism --- the ND-exclusion is load-bearing}
+
+FMA metadata is CC BY 4.0; audio is per-track artist-chosen CC, filtered on the \code{tracks.csv}
+license field. The pinned allowlist is $\mathcal A=\{\text{CC0/PD, CC-BY, CC-BY-SA, CC-BY-NC,
+CC-BY-NC-SA}\}$. A separated stem is a \textbf{derivative work}; CC licenses with the
+\textbf{NoDerivatives} clause forbid it, so
+\[
+\boxed{\ \text{allow}(L)\iff (L\ \text{recognized CC})\ \wedge\ \neg\,\ND(L)\ \wedge\ L\in\mathcal A.\ }
+\]
+The filter checks \ND\ \emph{first} and denies outright, before any BY/NC/SA parsing (so a BY-SA-ND
+string is still denied), and is \textbf{DENY-by-default}: empty / non-CC / \texttt{All Rights
+Reserved} / unparsable all deny (an allowlist, not a blocklist). CC-BY-\textbf{NC} \emph{is}
+included: the project is non-commercial research with no audio redistribution, and NC permits
+non-commercial derivatives (NC$\neq$ND) --- the scope is the load-bearing qualifier (were the
+project commercial or redistributing audio, NC would be excluded). The audit trail is two committed,
+audio-free artifacts: the manifest (IDs $+$ raw/canonical licenses $+$ screen flags) and the
+provenance file (teacher version/model/settings $+$ mean 4-stem consistency residual).\hfill
+$\blacksquare$
+
+\section{Statistics of the design}
+
+One pre-registered confirmatory pair, $\mathbf{mixed}-\mathbf{musdb\_only}$ on vocals SI-SDR
+(per-track paired bootstrap $95\%$ CI $+$ Wilcoxon); all else (\code{distill\_only},
+\code{mixed25}, \code{mixed\_trim}, the SLR battery at $\theta\in\{-50,-60,-70\}$) descriptive with
+pre-written readings, so the multiple-comparison burden is a single pair. Pooled between-seed noise
+$\sigma_{\text{seed}}=\sqrt{\tfrac12(\hat\sigma_{\text{base}}^2+\hat\sigma_{\text{mix}}^2)}$ is the
+ruler (\code{pooled\_seed\_sigma}, reused). The precondition gate $G>2$ dB guards $\Chat$'s
+denominator: on failure the premise (``a large gap exists'') failed upstream and the study reframes
+to documenting why (pre-registered), with \code{recovery\_fraction} returning $\Chat$ as
+not-evaluable rather than a fabricated number. H-10 (MASTER\_PLAN \S2): \textbf{supported} iff
+$\smix-\sbase>\sigma_{\text{seed}}$ and $\Chat\ge0.25$; \textbf{partial} iff real but
+$\Chat<0.25$; \textbf{null} iff $|\smix-\sbase|\le\sigma_{\text{seed}}$; \textbf{negative transfer}
+iff $\smix<\sbase-\sigma_{\text{seed}}$.
+
+\bigskip
+\noindent\emph{Cross-reference.} \S1 $\to$ hard-pseudo-label target path
+\code{MixedPools}$\to$\code{loop.py}; \S2 $\to$ \code{analysis/bleed.py} $+$ \code{losses/trimmed.py}
+$+$ \code{MixedPools.pool\_is\_fma}; \S3 $\to$ \code{data/pseudo.py} (within-pool remix); \S4 $\to$
+\code{analysis/bleed.py::recovery\_fraction}; \S5 $\to$ \code{prepare\_fma.py::canonicalize\_license}
+$+$ \code{teacher\_label.py::write\_provenance}; \S6 $\to$ \code{analysis/scaling.py::pooled\_seed\_sigma}.
+
+\end{document}
