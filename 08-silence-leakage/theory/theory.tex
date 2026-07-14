@@ -1,0 +1,185 @@
+\documentclass[11pt]{article}
+
+% Standalone mirror of ../THEORY.md. amsmath/amssymb only; no external figures,
+% no external packages, so it compiles with a bare LaTeX installation.
+% (Compile-untested in the build environment; written to compile with pdflatex.)
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\DeclareMathOperator{\STFT}{STFT}
+\DeclareMathOperator{\SISDR}{SI\text{-}SDR}
+\DeclareMathOperator{\SLR}{SLR}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\vhat}{\hat v}
+\newcommand{\norm}[1]{\lVert #1 \rVert}
+\newcommand{\Rsil}{R_{\text{sil}}}
+\newcommand{\Prsil}[1]{\Pr_{#1}[\text{silent}]}
+
+\title{Theory Notes --- Direction 08:\\
+The Silence-Leakage Ratio and the Cost of Quiet}
+\author{SingNet project}
+\date{Frozen 2026-07-13}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note derives the mathematics implemented in \code{singnet/\{metrics,data,eval,
+train\}/} for Direction 08: a metric (SLR) for the one failure the field-standard MSS
+metrics structurally cannot measure --- vocal energy leaking into the estimate during
+truly silent vocal regions (``ghost vocals'') --- and the four chunk-sampling policies
+whose exposure distributions the experiment compares. The crux is the pair (\S2,\,\S3):
+\S2 shows from primary-source code that museval NaNs silent frames and SI-SDR is singular
+on a silent target, so no standard metric ranks two systems by ghost-vocal behavior; \S3
+derives SLR with exact anchors and invariances. \S4 gives the four policies' closed-form
+expected silent exposure and the leakage mechanism. Every \S3--\S5 claim is machine-checked
+on synthetic signals (gate G0).
+\end{abstract}
+
+\section{The silence problem}
+A vocal stem is silent for long stretches (intros, breaks, outros) where the target is zero
+but the mixture is loud accompaniment. For a track with $N$ candidate chunk starts, let
+$\varphi$ be the fraction whose window vocal RMS is below the silence threshold; a step
+draws a start under a policy $\pi$, inducing a distribution over (chunk, activity) with
+$\Prsil{\pi}$ the probability the drawn target is silent. Uniform sampling makes
+$\Prsil{\pi} = \varphi$; other policies move it (\S4). The karaoke-critical failure is a
+\emph{ghost vocal}: energy in $\vhat$ during a break --- most audible (no vocal masks it),
+and, as \S2 shows, least measured.
+
+\section{The measurement gap, from primary sources}
+
+\paragraph{Silent-region identifier.} Frame the GT vocal at $100$\,ms\,/\,$50$\,ms hop; a
+frame is silent iff its RMS is below $10^{\theta/20}$ ($\theta=-60$ dBFS primary, the same
+constant as Direction~01's \code{sisdr} guard). Merge consecutive silent frames; keep runs
+of length $\ge L_{\min}=0.5$\,s. $\Rsil$ is their union
+(\code{silent\_regions}).
+
+\paragraph{museval NaNs silent frames (verified from \code{metrics.py}).} BSS-Eval SDR is
+framewise on $1$\,s windows, median over frames then tracks. The framewise guard is:
+\begin{verbatim}
+if not _any_source_silent(ref_slice) and not _any_source_silent(est_slice):
+    ...  # compute SDR, ISR, SIR, SAR for this window
+else:
+    a = np.empty((4, nsrc, nsrc)); a[:] = np.nan   # SDR, ISR, SIR, SAR
+\end{verbatim}
+Any window where the reference (or estimate) source is silent is set to \code{NaN} for all
+four metrics and dropped from the median. So museval SDR is computed \emph{only over frames
+where the vocal is active}; leakage into silent regions contributes nothing.
+
+\paragraph{SI-SDR is singular on a silent target.} With
+\[
+\alpha = \frac{\hat s^{\top} s}{\norm{s}^2}, \qquad
+\SISDR = 10\log_{10}\frac{\norm{\alpha s}^2}{\norm{\alpha s - \hat s}^2},
+\]
+a silent target $s=0$ makes $\alpha = \hat s^\top s/\norm{s}^2$ divide by zero: undefined.
+Nonzero leakage during silence has no well-defined SI-SDR --- the analytic reason museval
+inserts \code{NaN}.
+
+\paragraph{SAR/SIR inherit the blindness.} SDR, ISR, SIR, SAR are one BSS-Eval family on
+the same frames; the guard NaNs all four together whenever the source is silent. SIR and
+SAR are exactly the ``how much interference/artifact leaked'' quantities, but they are
+discarded on the only frames where a ghost-vocal leak can occur. Hence no standard metric
+ranks two systems by ghost-vocal behavior --- the gap SLR fills, and only it: SLR is
+computed \emph{only} on $\Rsil$, the frames SDR throws away.
+
+\section{SLR: definition, properties, limits}
+\begin{equation}
+\boxed{\ \SLR = 10\log_{10}
+  \frac{\sum_{t\in \Rsil}\vhat(t)^2 + \eps}{\sum_{t\in \Rsil} x(t)^2 + \eps},
+  \qquad \eps = 10^{-8}\ }
+\end{equation}
+leaked estimate energy relative to the mixture energy in the same silent regions; lower is
+better. Referencing $x$ (not the silent $v=0$) dodges the \S2 singularity. Write
+$E_{\vhat}=\sum_{\Rsil}\vhat^2$, $E_x=\sum_{\Rsil}x^2$.
+
+\paragraph{Anchors.}
+\begin{itemize}
+\item \textbf{Do-nothing} ($\vhat=x$): $E_{\vhat}=E_x \Rightarrow \SLR = 10\log_{10}1 =
+      \mathbf{0}$\,dB exactly ($\eps$ cancels).
+\item \textbf{Perfect} ($\vhat=0$): $\SLR = 10\log_{10}\frac{\eps}{E_x+\eps}$ --- the $\eps$
+      floor (not $-\infty$).
+\item \textbf{$f$-fraction leak} ($E_{\vhat}=fE_x$): $\SLR = 10\log_{10} f$, so a $10\%$
+      energy leak is $\mathbf{-10}$\,dB and $1\%$ is $-20$\,dB.
+\end{itemize}
+
+\paragraph{Invariances and monotonicity.} Scaling both $\vhat$ and $x$ by $c$ multiplies
+numerator and denominator by $c^2$: SLR is \emph{joint-gain invariant} ($\eps=0$, exact).
+$\SLR$ is strictly increasing in $E_{\vhat}$ (faithful order on leakage), and energy outside
+$\Rsil$ never enters the sums. $\eps$ is a \emph{floor} on the log argument, not a
+projection guard: there is no singularity to patch, since the ratio is of two nonnegative
+energies.
+
+\paragraph{$\theta/L_{\min}$ sensitivity, valid-$n$, and limits.} Lowering $\theta$ shrinks
+$\Rsil$ (stricter), raising it grows $\Rsil$; SLR (and even a pairwise comparison's sign)
+can move, so Direction~08 reports $\theta\in\{-50,-60,-70\}$ on every conclusion. A track
+with empty $\Rsil$ is \code{NaN} and excluded (museval convention), with valid-$n$ reported.
+Honest limits: SLR is timbre-blind (a $12$\,dB hi-hat leak and a $12$\,dB vocal-ghost leak
+score identically), phase-invisible (sample-domain), and region-definition dependent ---
+energy claims, worded as such.
+
+\section{The four policies as exposure distributions}
+Fix a track: $N$ starts, silent set $S$ with $|S|=k$, $\varphi=k/N$, and
+$\rho_E=\big(\sum_{s\in S}E(s)\big)/\sum_s E(s)\approx 0$ the vocal-energy share in silent
+windows. The chunk-start weights (\code{ChunkSampler.weights}) and expected silent exposure
+$\Prsil{\pi}=\sum_{s\in S}w(s)$ are:
+\begin{center}
+\begin{tabular}{lll}
+\hline
+Policy & Weight on start $s$ & $\Prsil{\pi}$ \\
+\hline
+\code{uniform} & $1/N$ & $\varphi$ \\
+\code{drop} & $\mathbb{1}[E(s)\ge\theta]/(N-k)$ & $0$ \\
+\code{energy} & $(1-\lambda)\frac{E(s)}{\sum E}+\frac{\lambda}{N}$ &
+  $(1-\lambda)\rho_E+\lambda\varphi$ \\
+\code{curriculum} & \code{energy} with $\lambda=\lambda(t)$ & time-integral (\S5) \\
+\hline
+\end{tabular}
+\end{center}
+Thus \code{uniform} sees silence at the base rate $\varphi$; \code{drop} with probability
+\emph{exactly} $0$ (its support is $S^\complement$); \code{energy} at
+$(1-\lambda)\rho_E+\lambda\varphi \ge \lambda\varphi>0$ --- the floor mass $\lambda/N$ on
+each silent start guarantees the positive lower bound: silence is down-weighted, never
+starved (with $\lambda=0.1$, roughly $\tfrac1{10}$ of uniform's exposure).
+
+\paragraph{Mechanism.} The separator is a sigmoid magnitude mask; on a silent region the
+correct output is $M\approx 0$. \code{drop} gives zero exposure, so the ``output silence''
+mode is never fit: at test time an instrumental break is out of distribution and the model
+falls back to the (nonzero) mask learned for spectrally similar content, passing
+accompaniment through --- \emph{structured leakage}, not random noise (H-08b: \code{drop}
+leaks more than \code{uniform}). \code{energy} keeps reduced-but-nonzero exposure while
+concentrating gradient on active chunks (H-08a: quality). The plane decides whether that is
+a free lunch or a tradeoff.
+
+\section{Curriculum: schedule and exposure integral}
+$\lambda(t)$ anneals linearly $1.0\to 0.1$ over the first half of training, then holds at
+$0.1$ (values $[1.0,0.55,0.1,0.1,0.1]$ at $\{0,25,50,75,100\}\%$). Since
+$\Pr[\text{silent}\mid\lambda]=(1-\lambda)\rho_E+\lambda\varphi$ is linear in $\lambda$,
+the run-averaged exposure uses $\bar\lambda=\frac1T\int_0^T\lambda(t)\,dt$:
+\begin{equation}
+\bar\lambda = \tfrac12\cdot\tfrac{1.0+0.1}{2} + \tfrac12\cdot 0.1 = 0.275+0.05 = 0.325,
+\end{equation}
+so \code{curriculum} exposes silence at $\approx 0.325\varphi$ --- between \code{energy}
+($0.1\varphi$) and \code{uniform} ($\varphi$) --- but front-loaded. Motivation
+(easy-then-hard): fit the easy ``output $0$'' mode early (high $\lambda$), specialize on
+the hard active mode late (low $\lambda$). Stated as motivation; no primary claim rests on
+it (schedule$\times$LR-decay confound noted).
+
+\section{Statistics and the selection guard}
+Let $q(\pi)$ = mean best-checkpoint validation SI-SDR and $\ell(\pi)$ = mean validation SLR
+($\theta=-60$). Pool $\sigma^q_{\text{seed}}$, $\sigma^\ell_{\text{seed}}$ over the three
+$3$-seed cells. The jointly pre-registered tests:
+\[
+\text{H-08a: } q(\text{energy})-q(\text{uniform}) > \sigma^q_{\text{seed}}, \qquad
+\text{H-08b: } \ell(\text{drop})-\ell(\text{uniform}) > \sigma^\ell_{\text{seed}}.
+\]
+The headline is the $(\SISDR,\SLR)$ plane with per-seed scatter and the do-nothing
+($0$\,dB) and oracle-IRM anchors; the two axes are \textbf{not} scalarized (the tradeoff
+geometry is the finding), and no cross-hypothesis correction is applied (distinct metrics,
+jointly pre-registered). \textbf{Selection is SI-SDR-only}: \code{is\_new\_best} takes no
+SLR argument, and \code{validation\_report} computes SLR alongside but the loop compares
+only SI-SDR, so $\ell$ is the leakage of the SI-SDR-best checkpoint (unbiased for the
+comparison). A test asserts the selection helper is SLR-blind; the G3 gate audits it.
+
+\end{document}
