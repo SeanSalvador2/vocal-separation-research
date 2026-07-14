@@ -1,0 +1,215 @@
+\documentclass[11pt]{article}
+
+% Standalone mirror of ../THEORY.md. amsmath/amssymb only; no external figures,
+% no external packages, so it compiles with a bare LaTeX installation.
+% (Compile-untested in the build environment; written to compile with pdflatex.)
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\DeclareMathOperator{\STFT}{STFT}
+\DeclareMathOperator{\iSTFT}{iSTFT}
+\DeclareMathOperator{\Rea}{Re}
+\DeclareMathOperator{\clip}{clip}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\SE}{SE}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\vt}{\tilde v}
+\newcommand{\at}{\tilde a}
+\newcommand{\norm}[1]{\lVert #1 \rVert}
+\newcommand{\inner}[2]{\langle #1,#2\rangle}
+\newcommand{\keptbar}{\overline{\langle a\rangle}_{\text{kept}}}
+\newcommand{\dropbar}{\overline{\langle a\rangle}_{\text{dropped}}}
+
+\title{Theory Notes --- Direction 06:\\
+Robust Training under Stem Bleed}
+\author{SingNet project}
+\date{Frozen 2026-07-13}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note derives the mathematics implemented in \code{singnet/\{data,losses,analysis,
+train\}/} for Direction 06: how a controlled stem-bleed corruption of the training
+targets hurts a compact mask-based separator, and why a cheap classical defense (trimmed
+loss) can recover some of the loss. The crux is the pair (\S3,\,\S5): \S3 gives a
+falsifiable closed-form null --- the clean SI-SDR of a model that perfectly learns the
+corrupted target, $\STFT$-exact and machine-checked; \S5 derives the mechanism by which
+trimming, run \emph{outside} its proven sample-level regime, selects the effectively
+cleanest chunks under \emph{uniform} corruption. Every \S3 number is machine-checked
+against \code{singnet/analysis/bleed.py} on synthetic stems.
+\end{abstract}
+
+Notation. Clean vocal $v$, accompaniment $a$, mixture $x=v+a$; complex STFTs $V,A,X=V+A$.
+The separator predicts a soft mask $M\in[0,1]^{F\times T}$ and estimates
+$\widehat V=M\odot|X|\,e^{i\angle X}$ (masked mixture magnitude, \emph{mixture phase});
+$\hat v=\iSTFT(\widehat V)$. Bleed level $\eps\in\{0,0.05,0.15,0.30\}$.
+
+\section{Corruption as continuous-target label noise}
+
+Applied at the stem level, at load time, before augmentation, to training targets only:
+\begin{equation}
+\boxed{\ \vt = v + \eps\,a,\qquad \at = (1-\eps)\,a\ }
+\end{equation}
+a \emph{redistribution} of a fraction $\eps$ of the accompaniment into the vocal target.
+
+\paragraph{Mixture invariance.} $\vt+\at = v+\eps a+(1-\eps)a = v+a = x$: the corrupted
+stems still sum to the true mixture, so the network input is untouched and the model learns
+$x\mapsto v+\eps a$ --- to leave $\eps a$ in its vocal estimate. This is the defining
+property of real bleed and of \code{SDXDB23\_Bleeding}. The map is deterministic (no RNG),
+so wiring it in cannot perturb any augmentation stream --- the corrupted arm changes only
+the target's content (unit-tested).
+
+\paragraph{Loudness (pre-registered).} $\norm{\vt}^2=\norm{v}^2+2\eps\inner{v}{a}+
+\eps^2\norm{a}^2$ grows with $\eps$; we do \emph{not} renormalize (real bleed adds energy;
+the input standardization is mixture-side; random-gain already randomizes levels;
+renormalizing would confound $\eps$ with attenuation). The prediction line (\S3) uses the
+same un-normalized construction, so the comparison is internally consistent.
+
+\section{The corrupted-optimal L1-magnitude model}
+
+With loss $\mathcal L=\operatorname{mean}\big|M\odot|X|-|\vt|\big|$ and corrupted target
+magnitude $|\vt|=|V+\eps A|$, the L1 objective is separable across TF bins. At a bin, the
+minimizer of $|M|X|-t|$ over $M\in[0,1]$ with $t=|V+\eps A|$ is
+\begin{equation}
+\boxed{\ M^\star=\clip\!\Big(\tfrac{|V+\eps A|}{|V+A|},0,1\Big)\ }
+\quad\Longrightarrow\quad M^\star|X|=\min\big(|V+\eps A|,|V+A|\big).
+\end{equation}
+Since $\eps<1$ the corrupted target carries less accompaniment than the mixture, so
+$|V+\eps A|\le|V+A|$ on almost all bins (clip inactive) and the optimum reproduces the
+\emph{corrupted-target} magnitude. Expanding,
+\begin{equation}
+|V+\eps A| = |V| + \eps\,\underbrace{\Rea\!\big(A\,e^{-i\angle V}\big)}_{\Delta}
+    + O(\eps^2),\qquad |\Delta|\le|A|,
+\end{equation}
+so the L1-optimal masked magnitude is $|V|+\eps\Delta+O(\eps^2)$: the model is trained to
+output the clean vocal magnitude \emph{plus} a systematic $\eps$-scaled accompaniment term.
+It leaks $\eps a$ by construction; the residual against $|V|$ is $\eps\Delta\ne0$.
+
+\paragraph{Phase caveat.} The mask wears the mixture phase $\angle(V+A)$, not
+$\angle(V+\eps A)$, so even the magnitude-perfect estimate is not the complex $V+\eps A$.
+The idealized $\hat v=v+\eps a$ (\S3) is thus a magnitude-\emph{and}-phase ideal upper-bounding
+the mask model; the mixture-phase penalty is $\eps$-independent (already present at
+$\eps=0$), so the \emph{degradation curve} $s(0)-s(\eps)$ cancels it and isolates the bleed
+cost. The dose--response curve, not the absolute SI-SDR, is the clean observable.
+
+\section{The prediction line $P(\eps)$}
+
+The idealized model outputs $\hat s=v+\eps a$; its clean SI-SDR against $s=v$ is closed-form.
+With $\rho=\inner{a}{v}/(\norm{a}\norm{v})$,
+\begin{equation}
+\alpha=\frac{\inner{\hat s}{s}}{\norm{s}^2}
+   =1+\eps\,\frac{\inner{a}{v}}{\norm{v}^2}
+   =1+\eps\,\rho\,\frac{\norm{a}}{\norm{v}},
+\end{equation}
+and the noise is
+\begin{equation}
+\alpha v-\hat s=(\alpha-1)v-\eps a
+   =-\eps\Big(a-\tfrac{\inner{a}{v}}{\norm{v}^2}v\Big)=-\eps\,a_\perp,
+\end{equation}
+so \emph{only the component of $a$ orthogonal to $v$ survives as SI-SDR noise} --- the
+$v$-parallel bleed is absorbed by the scale-invariant $\alpha$. With
+$\norm{a_\perp}^2=\norm{a}^2(1-\rho^2)$,
+\begin{equation}
+\boxed{\ P_{\text{track}}(\eps)=10\log_{10}
+   \frac{\alpha^2\,\norm{v}^2}{\eps^2\,\norm{a}^2\,(1-\rho^2)}\ }
+\qquad(\text{exact projection form}).
+\end{equation}
+
+\paragraph{Orthogonality and the $-20\log_{10}\eps$ slope.} When $v\perp a$ ($\rho=0$),
+$\alpha=1$ and
+\begin{equation}
+P_{\text{track}}(\eps)=10\log_{10}\frac{\norm{v}^2}{\eps^2\norm{a}^2}
+   =\underbrace{-20\log_{10}\eps}_{\text{universal slope}}
+   +\underbrace{10\log_{10}\tfrac{\norm{v}^2}{\norm{a}^2}}_{\text{per-track anchor}},
+\end{equation}
+a $-20\log_{10}\eps$ line ($\approx6.0$ dB per halving of $\eps$) anchored by each track's
+energy ratio. \code{prediction\_line} returns both the exact and the orthogonal columns;
+their difference measures departure from orthogonality. Machine-checked: orthogonal
+$v=[1,1,1,1],a=[1,-1,1,-1]$ gives $P(0.1)=20.0$ dB with exact$=$orthogonal; non-orthogonal
+$v=[1,0],a=[1,1],\eps=0.5$ gives $\alpha=1.5,\rho^2=\tfrac12$, so exact
+$=10\log_{10}9=9.54$ dB vs orthogonal $=10\log_{10}2=3.01$ dB.
+
+\paragraph{Reading the gap.} Let $s(\eps)$ be the measured clean curve. $s\approx P$:
+faithful learning of the corrupted conditional (no implicit denoising). $s>P$: implicit
+robustness (the model beats the ``leak exactly $\eps a$'' estimator). $s<P$: corruption
+also destabilizes optimization. If the curve is flat, $P(\eps)$ must sit well below it,
+turning ``flat'' into a quantified robustness claim. $P$ is computed from clean stems only.
+
+\section{Trimmed estimators, honestly compared}
+
+ITLM (Shen \& Sanghavi, 2019) alternates selecting the $\alpha=1-q$ fraction of lowest-loss
+samples and retraining on them; it \emph{provably} recovers ground truth in GLMs when a
+fraction of samples are arbitrarily corrupted and \emph{the rest are clean} --- a
+\emph{sample-level} premise. Arpit (2017): DNNs learn general patterns first and memorize
+noise later, so early high loss $\approx$ likely-corrupted.
+
+Under Direction 06's \emph{uniform} bleed every target is corrupted by the same $\eps$:
+there are \emph{no} clean samples, so ITLM's premise fails and a null is pre-registered.
+What trimming can still do is select the \emph{less-corrupted} chunks --- those whose
+$\eps a$ happens to be quiet. Whether that has teeth depends on whether per-chunk loss
+correlates with per-chunk corruption magnitude; \S5 shows it does, through accompaniment
+energy. We run the classic trick outside its proven regime and report the mechanism.
+
+The wrapper keeps $\lceil(1-q)B\rceil$ chunks per step (MASTER\_PLAN \S3.2; for $q=0.30,
+B=16$ this is $\lceil11.2\rceil=12$); $q=0$ reduces to the base loss.
+
+\section{Selection mechanism under uniform bleed}
+
+Fix a converged \emph{general} model $f$ (clean vocal structure learned, chunk noise not
+memorized). Its per-chunk L1-mag loss on corrupted chunk $i$ is, by the \S2 expansion,
+\begin{equation}
+\ell_i(f)=\operatorname*{mean}_{TF}\big|f(|X_i|)-|V_i+\eps A_i|\big|
+   \approx\eps\operatorname*{mean}_{TF}|\Delta_i|,
+\qquad \Delta_i=\Rea\!\big(A_i e^{-i\angle V_i}\big).
+\end{equation}
+By Cauchy--Schwarz $\operatorname{mean}|\Delta_i|$ is bounded by, and tracks, the chunk's
+accompaniment energy $\langle a\rangle_i=\norm{a_i}^2/N$, so
+\begin{equation}
+\boxed{\ \ell_i(f)\approx\ell_{\text{clean}}+c\,\eps\,g(\langle a\rangle_i),\quad g\
+\text{increasing}\ }
+\end{equation}
+per-chunk irreducible loss is monotone in accompaniment energy. Keeping the lowest-loss
+chunks therefore keeps low-$\langle a\rangle$ chunks and drops high-$\langle a\rangle$ ones
+--- the low-$\langle a\rangle$ chunks are the ones whose $\eps a$ bleed is quietest, the
+\emph{effectively cleanest} targets. Trimming is \textbf{curriculum-by-cleanliness}: each
+step trains on the least-contaminated slice of an entirely-contaminated dataset.
+
+\paragraph{Testable signature.}
+\begin{equation}
+\boxed{\ \keptbar < \dropbar\ }
+\end{equation}
+the kept chunks' mean accompaniment energy is below the dropped chunks'. The loop logs this
+every 500 steps (raw same-track $\langle a\rangle_i$ at the vocal window --- the $\eps$- and
+augmentation-invariant covariate). No separation $\Rightarrow$ no cleanliness gradient
+$\Rightarrow$ H-06b refuted with a mechanism.
+
+\section{Statistics}
+
+Pooled between-seed noise over the three 3-seed cells:
+$\sigma_{\text{seed}}=\sqrt{\tfrac13\sum_c\hat\sigma_c^2}$. Recovery fraction
+$\rho=(s_{\text{trim}}-s_{\text{bleed}})/(s_{\text{clean}}-s_{\text{bleed}})=u/d$; by the
+delta method, treating the three 3-seed means as independent with variances
+$\hat\sigma_c^2/n$,
+\begin{equation}
+\Var(\rho)\approx\Big(\tfrac1d\Big)^2\tfrac{\hat\sigma_{\text{trim}}^2}{n}
+ +\Big(\tfrac{u}{d^2}\Big)^2\tfrac{\hat\sigma_{\text{clean}}^2}{n}
+ +\Big(\tfrac{u-d}{d^2}\Big)^2\tfrac{\hat\sigma_{\text{bleed}}^2}{n},\quad
+ \SE(\rho)=\sqrt{\Var(\rho)},
+\end{equation}
+CI $\rho\pm z\,\SE$. When $d\le0$ (H-06a unsupported), $\rho$ is not evaluable. Exactly two
+pre-registered paired contrasts are tested on the 50 clean test tracks (bleed30$-$clean;
+trim30$-$bleed30) with a bootstrap 95\% CI $+$ Wilcoxon; with only two primary pairs we
+report both CIs rather than a family-wise correction.
+
+\bigskip
+\noindent\emph{Cross-reference.} \S1 \code{data/corrupt.py}; \S2 \code{losses/l1mag.py};
+\S3 \code{analysis/bleed.py::prediction\_line} (machine-checked in
+\code{tests/test\_bleed\_analysis.py}); \S4--5 \code{losses/trimmed.py} $+$ the
+\code{acc\_energy} telemetry in \code{data/musdb\_dataset.py}$\to$\code{train/loop.py};
+\S6 \code{analysis/bleed.py::recovery\_fraction} $+$
+\code{analysis/scaling.py::pooled\_seed\_sigma}.
+
+\end{document}
