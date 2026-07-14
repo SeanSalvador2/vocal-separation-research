@@ -260,7 +260,9 @@ This linearization is **identical** to Direction 06's recovery fraction with the
 s_{\text{bleed}})/(s_{\text{clean}}-s_{\text{bleed}})$ has $\partial_\text{trim}=1/d$,
 $\partial_\text{clean}=-u/d^2$, $\partial_\text{bleed}=(u-d)/d^2$ — so **$\hat C$ reuses
 `recovery_fraction` verbatim** (`recovery_fraction(s_clean=s_T, s_bleed=s_base, s_trim=s_mix)`),
-including its "not-evaluable when $d\le0$" guard — which is exactly the precondition gate (§6). The
+including its "not-evaluable when $d\le0$" guard — which **backstops** the precondition gate (§6):
+the code refuses a degenerate $d\le0$, and the pre-registered analyst gate $G>2$ dB is the
+stricter condition applied on top. The
 per-cell $\mathrm{Var}(s_\cdot)$ each combine the seed term ($\sigma^2/3$; $0$ for $s_T$) with the
 paired-track term. Because the three scores are **paired over tracks**, the *primary* reported CI
 is a **paired bootstrap over the 50 tracks** (resample tracks, recompute $\hat C$) — it respects
@@ -364,9 +366,10 @@ $\hat C$ divides by $d=G$. If $G\le2$ dB on the frozen protocol, the **premise**
 exists to close" — failed upstream (the student is unexpectedly strong, or the teacher weak on this
 metric), and $\hat C$ is ill-conditioned (a ratio with a tiny, noisy denominator). The gate is a
 **sanity precondition, not a hypothesis**: on failure the study reframes to documenting *why the
-gap is small* (pre-registered), and `recovery_fraction`'s $d\le0$ / small-$d$ path returns $\hat C$
-as not-evaluable rather than a fabricated large number. This mirrors D06's "not evaluable when the
-model was not hurt" guard — the same numerical honesty. The H-10 decision rules (MASTER_PLAN §2)
+gap is small* (pre-registered). The code backstops this — `recovery_fraction` returns $\hat C$ as
+not-evaluable for a degenerate $d\le0$ rather than a fabricated large number (D06's "not evaluable
+when the model was not hurt" guard, the same numerical honesty) — while the stricter $G>2$ dB
+precondition is applied by the analysis on top. The H-10 decision rules (MASTER_PLAN §2)
 sit on top: **supported** iff $s_{\text{mix}}-s_{\text{base}}>\sigma_{\text{seed}}$ **and**
 $\hat C\ge0.25$; **partial** iff real but $\hat C<0.25$; **null** iff $|s_{\text{mix}}-
 s_{\text{base}}|\le\sigma_{\text{seed}}$; **negative transfer** iff $s_{\text{mix}}<s_{\text{base}}

@@ -153,7 +153,8 @@ refuses MUSDB roots, \S5 of the plan).
 \]
 This linearization is \emph{identical} to D06's recovery fraction under the map (clean$\to\sT$,
 bleed$\to\sbase$, trim$\to\smix$), so $\Chat$ reuses \code{recovery\_fraction} verbatim, including
-its ``not-evaluable when $d\le0$'' guard (the precondition gate, \S6). Each $\Var(s_\cdot)$ combines
+its ``not-evaluable when $d\le0$'' guard, which backstops the precondition gate (\S6): the code
+refuses a degenerate $d\le0$ and the stricter $G>2$ dB gate is applied on top. Each $\Var(s_\cdot)$ combines
 a seed term ($\sigma^2/3$; $0$ for $\sT$) and a paired-track term; because the three scores are
 paired over the 50 tracks, the \emph{primary} CI is a paired bootstrap over tracks (respecting the
 covariance the independent-cell delta method drops), with the delta-method CI as its closed-form
@@ -192,8 +193,8 @@ pre-written readings, so the multiple-comparison burden is a single pair. Pooled
 $\sigma_{\text{seed}}=\sqrt{\tfrac12(\hat\sigma_{\text{base}}^2+\hat\sigma_{\text{mix}}^2)}$ is the
 ruler (\code{pooled\_seed\_sigma}, reused). The precondition gate $G>2$ dB guards $\Chat$'s
 denominator: on failure the premise (``a large gap exists'') failed upstream and the study reframes
-to documenting why (pre-registered), with \code{recovery\_fraction} returning $\Chat$ as
-not-evaluable rather than a fabricated number. H-10 (MASTER\_PLAN \S2): \textbf{supported} iff
+to documenting why (pre-registered); \code{recovery\_fraction} backstops it by returning $\Chat$ as
+not-evaluable for a degenerate $d\le0$, with the stricter $G>2$ dB gate applied on top. H-10 (MASTER\_PLAN \S2): \textbf{supported} iff
 $\smix-\sbase>\sigma_{\text{seed}}$ and $\Chat\ge0.25$; \textbf{partial} iff real but
 $\Chat<0.25$; \textbf{null} iff $|\smix-\sbase|\le\sigma_{\text{seed}}$; \textbf{negative transfer}
 iff $\smix<\sbase-\sigma_{\text{seed}}$.
