@@ -6,8 +6,11 @@ data-science lifecycle with the rigor of a real research paper — pre-registere
 hypotheses, a frozen evaluation protocol, reproducible code, and honest reporting of
 whatever the results turn out to be.
 
-**Status: planning complete, nothing trained yet.** No datasets are downloaded and no
-models have been run. See [`PLAN.md`](PLAN.md) for the full project plan.
+**Status: all seven directions fully scaffolded and pre-registered — nothing trained
+yet.** No datasets are downloaded and no models have been run; every experiment is
+specified, coded, and unit-tested (442 CPU tests, no GPU required) and waits only on
+compute. See [`PLAN.md`](PLAN.md) for the umbrella plan and each direction's
+`MASTER_PLAN.md` for its frozen experiment spec and run book.
 
 ## Start here
 
@@ -18,22 +21,30 @@ models have been run. See [`PLAN.md`](PLAN.md) for the full project plan.
 - [`RESEARCH_NOTES.md`](RESEARCH_NOTES.md) — deeper citation grounding for the
   architectures, losses, datasets, and feasibility claims used throughout.
 
-## Approved research directions
+## The seven research directions (all scaffolded)
 
-Each will live in its own top-level folder once scaffolded:
+Every direction folder contains the full artifact set: a frozen, self-contained
+`MASTER_PLAN.md` (pre-registered hypotheses with numeric decision rules + a step-by-step
+run book), `THEORY.md` + a compilable `theory/theory.tex`, lifecycle Jupyter notebooks
+(scaffolded, deliberately **not executed** — every compute cell carries a "RUN THIS
+LATER" banner with a runtime estimate), configs for every run, a `paper/PAPER.md`
+scaffold with pre-written interpretations for **every** possible outcome, and a
+plain-language `SEAN-README.md`.
 
-1. `01-loss-function-study/` — SI-SDR vs. L1 loss for a compact separation U-Net
-2. `02-augmentation-data-scaling/` — augmentation factorization + data-scaling curves
-3. `03-mini-band-split/` — a mini band-split front-end, param-matched against a baseline
-5. `05-lora-source-separation/` — parameter-efficient (LoRA) fine-tuning for source separation
-6. `06-robust-training/` — robustness under stem-bleed / label noise + a cheap mitigation
-8. `08-silence-leakage/` — the "silence problem": chunk-sampling ablation + a leakage metric
-10. `10-demucs-distillation/` — Demucs-as-teacher distillation on pseudo-labeled data
+1. [`01-loss-function-study/`](01-loss-function-study/SEAN-README.md) — "train on what you test?" — five losses, one U-Net, controlled
+2. [`02-augmentation-data-scaling/`](02-augmentation-data-scaling/SEAN-README.md) — what each augmentation is worth + the data-scaling curve
+3. [`03-mini-band-split/`](03-mini-band-split/SEAN-README.md) — the SOTA family's band-split idea, isolated at ~10 M params (param-matched to +0.06 %)
+5. [`05-lora-source-separation/`](05-lora-source-separation/SEAN-README.md) — first careful LoRA-for-separation study (verified literature gap)
+6. [`06-robust-training/`](06-robust-training/SEAN-README.md) — stem-bleed dose–response vs a closed-form null model + a trimmed-loss defense
+8. [`08-silence-leakage/`](08-silence-leakage/SEAN-README.md) — the SLR "ghost vocals" metric + a chunk-sampling tradeoff study
+10. [`10-demucs-distillation/`](10-demucs-distillation/SEAN-README.md) — teacher pseudo-labels on license-audited free audio; the program finale
 
-Each direction folder will contain: a `MASTER_PLAN.md`, `THEORY.md` (+ LaTeX), one or more
-Jupyter notebooks covering the full DS lifecycle (scaffolded, not yet executed), a
-reproducible `singnet/`-style code package, a draft paper/report with placeholders for
-results, and a `SEAN-README.md` explaining the direction in plain terms.
+Shared machinery lives in the tested [`singnet/`](singnet/) package (data pipeline,
+augmentation switchboard, models, losses, metrics incl. SLR, training/eval, analysis)
+with `tests/` runnable on CPU (`pip install -r requirements.txt && python -m pytest`).
+One three-seed baseline cell is bit-identical across six directions (config-hash
+`a97d5400e994`, test-asserted), saving ~15 redundant GPU-hours. Total pre-registered
+GPU budget across all directions: ≈ 95–140 T4-hours on Colab Pro.
 
 ## Research library (Phase 0)
 
