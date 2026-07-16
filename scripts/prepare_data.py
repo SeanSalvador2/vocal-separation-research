@@ -13,7 +13,7 @@ Typical use (from the run book, §8):
     python scripts/prepare_data.py --write-manifest --out $SHARD_ROOT \
         --splits-csv 01-loss-function-study/configs/splits.csv
 
-    # 3. verify shard counts, sample rates, and mixture ≈ sum(stems)
+    # 3. verify shard integrity + decode sanity (codec noise reported, not gated)
     python scripts/prepare_data.py --verify --out $SHARD_ROOT
 
 Decode is the slow step; do it once, not per session. Expected output ≈ 12-15 GB.
@@ -154,27 +154,64 @@ def write_energy_profiles(
     print(f"wrote {len(profiles)} track profiles ({total} grid windows) to {path} (+ .csv)")
 
 
+# Decode-bug gates for mixture-stream vs stem-sum (see DEVIATION 2026-07-16 in
+# 01-loss-function-study/results/DEVIATIONS.md): MUSDB18's five streams are
+# AAC-coded INDEPENDENTLY, so pointwise mixture != sum(stems) is expected (the
+# first real-data run measured max-abs 3.0 at loud transients, where the encoded
+# mixture stream is also peak-limited relative to the raw float stem sum). All
+# training/eval code constructs mixtures as stem sums and never reads the decoded
+# mixture stream, so codec noise is reported as a statistic; verify FAILS only on
+# signatures of genuine decode bugs (misalignment kills the correlation, gain or
+# channel errors blow up the relative RMS error).
+REL_RMS_TOLERANCE = 0.05   # relative RMS error of (mixture - sum) vs mixture
+CORR_TOLERANCE = 0.99      # Pearson correlation between mixture and stem sum
+
+
 def verify(out: str, sample_rate: int = 44100) -> None:
-    """Re-check shard counts, sample rates, and mixture ≈ sum(stems)."""
+    """Re-check shard integrity and mixture-vs-sum(stems) decode sanity."""
     import numpy as np
     import soundfile as sf
 
     out_dir = Path(out)
-    track_dirs = [p for p in out_dir.iterdir() if p.is_dir()]
+    track_dirs = sorted(p for p in out_dir.iterdir() if p.is_dir())
     if not track_dirs:
         raise SystemExit(f"no shards under {out_dir} — run decode first (RUN LATER)")
-    max_err = 0.0
+    rows, failures = [], []
     for track_dir in track_dirs:
         mixture, sr = sf.read(track_dir / "mixture.wav", dtype="float32")
         if sr != sample_rate:
             raise SystemExit(f"FAIL: {track_dir.name} sample rate {sr} != {sample_rate}")
-        recon = sum(sf.read(track_dir / f"{s}.wav", dtype="float32")[0] for s in STEMS)
-        err = float(np.max(np.abs(mixture - recon)))
-        max_err = max(max_err, err)
-    status = "OK" if max_err < MIX_TOLERANCE else "FAIL"
-    print(f"{status}: {len(track_dirs)} tracks; max |mixture - sum(stems)| = {max_err:.2e} (tol {MIX_TOLERANCE})")
-    if max_err >= MIX_TOLERANCE:
+        stems = [sf.read(track_dir / f"{s}.wav", dtype="float32")[0] for s in STEMS]
+        if any(st.shape != mixture.shape for st in stems):
+            raise SystemExit(f"FAIL: {track_dir.name} stem/mixture shape mismatch")
+        recon = sum(stems)
+        if not (np.isfinite(mixture).all() and np.isfinite(recon).all()):
+            raise SystemExit(f"FAIL: {track_dir.name} non-finite samples")
+        diff = mixture - recon
+        mix_rms = float(np.sqrt(np.mean(mixture**2))) or 1e-12
+        rel = float(np.sqrt(np.mean(diff**2))) / mix_rms
+        m, r = mixture.ravel(), recon.ravel()
+        corr = float(np.dot(m - m.mean(), r - r.mean())
+                     / ((np.linalg.norm(m - m.mean()) * np.linalg.norm(r - r.mean())) or 1e-12))
+        max_abs = float(np.max(np.abs(diff)))
+        rows.append((track_dir.name, rel, corr, max_abs))
+        if rel > REL_RMS_TOLERANCE or corr < CORR_TOLERANCE:
+            failures.append((track_dir.name, rel, corr))
+    rels = np.array([r[1] for r in rows])
+    print(f"{len(rows)} tracks | mixture-vs-sum relative RMS error: "
+          f"median {np.median(rels):.4f}, max {rels.max():.4f} "
+          f"(gate {REL_RMS_TOLERANCE}); min corr "
+          f"{min(r[2] for r in rows):.5f} (gate {CORR_TOLERANCE})")
+    worst = sorted(rows, key=lambda r: -r[3])[:5]
+    print("largest pointwise |mixture - sum| (expected at loud transients — "
+          "informative, not gated):")
+    for name, rel, corr, max_abs in worst:
+        print(f"  {max_abs:6.3f}  rel {rel:.4f}  corr {corr:.5f}  {name}")
+    if failures:
+        for name, rel, corr in failures:
+            print(f"FAIL: {name} rel_rms {rel:.4f} corr {corr:.5f} — decode-bug signature")
         raise SystemExit(1)
+    print(f"OK: {len(rows)} tracks pass shard-integrity and decode-sanity gates")
 
 
 def main(argv: list[str] | None = None) -> None:

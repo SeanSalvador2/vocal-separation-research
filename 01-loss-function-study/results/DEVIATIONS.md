@@ -5,10 +5,26 @@ with date + reason.*
 
 ## Experimental / execution deviations
 
-**None.** Nothing has been trained; the frozen plan (MASTER_PLAN, 2026-07-13) is
-intact. This section will accumulate entries only if execution departs from the
-pre-registered design (e.g. the §3.2 budget-halving rule fires, or gate G2
-triggers the extra-seed escalation).
+- **2026-07-16 — Data-prep verify criterion revised (MASTER_PLAN §4.3).** The plan
+  specified "mixture ≈ sum of stems (max abs error < 1e-3 for MUSDB18's AAC)".
+  The first real decode (Windows, full 150-track MUSDB18) measured
+  **max |mixture − sum(stems)| = 3.0** on healthy shards. Root cause: the plan's
+  tolerance assumed near-exact additivity, but MUSDB18's five streams are
+  **AAC-encoded independently**, and at loud transients the encoded mixture
+  stream is additionally peak-limited relative to the raw float stem sum —
+  pointwise max-abs is the wrong lens for codec noise. Impact on the science:
+  **none** — every training/eval path constructs mixtures as stem sums
+  (`singnet/data/musdb_dataset.py`, `singnet/eval/evaluate.py`) and never reads
+  the decoded mixture stream. Revision: `--verify` now hard-gates decode-bug
+  signatures (per-track relative RMS error ≤ 5 %, mixture↔sum correlation
+  ≥ 0.99, shape/rate/finiteness checks) and reports the codec-noise statistics
+  (median/max relative RMS, worst pointwise offenders) as information. New unit
+  tests prove the gate still catches misalignment, gain errors, and truncation
+  (`tests/test_prepare_data_verify.py`). This is the first execution deviation
+  and the plan's 1e-3 figure should be read as superseded by this entry.
+
+Nothing has been trained; the frozen plan (MASTER_PLAN, 2026-07-13) is otherwise
+intact.
 
 ## Build-time implementation clarifications
 
