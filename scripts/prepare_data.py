@@ -171,6 +171,17 @@ def write_energy_profiles(
 REL_RMS_TOLERANCE = 0.05   # relative RMS error of (mixture - sum) vs mixture
 CORR_TOLERANCE = 0.99      # Pearson correlation between mixture and stem sum
 
+# Official SigSep errata (sigsep.github.io/datasets/musdb.html, fetched from the
+# site source github.com/sigsep/website content/datasets/musdb.md, 2026-07-16):
+# tracks with DOCUMENTED upstream defects. A gate failure on one of these is
+# reported as a WARN (known dataset error, not a decode bug) and does not fail
+# verification; any other track failing the gates still hard-fails. First
+# real-data run: "PR - Oh No" tripped the gates (rel 0.416, corr 0.941) and is
+# precisely the track the errata lists for this failure mode.
+KNOWN_DATASET_ERRATA = {
+    "PR - Oh No": "sum of sources does not add up to the mix for the left channel",
+}
+
 
 def verify(out: str, sample_rate: int = 44100) -> None:
     """Re-check shard integrity and mixture-vs-sum(stems) decode sanity."""
@@ -212,11 +223,19 @@ def verify(out: str, sample_rate: int = 44100) -> None:
           "informative, not gated):")
     for name, rel, corr, max_abs in worst:
         print(f"  {max_abs:6.3f}  rel {rel:.4f}  corr {corr:.5f}  {name}")
-    if failures:
-        for name, rel, corr in failures:
+    known = [f for f in failures if f[0] in KNOWN_DATASET_ERRATA]
+    unknown = [f for f in failures if f[0] not in KNOWN_DATASET_ERRATA]
+    for name, rel, corr in known:
+        print(f"WARN: {name} rel_rms {rel:.4f} corr {corr:.5f} — documented upstream "
+              f"dataset defect (SigSep errata: {KNOWN_DATASET_ERRATA[name]}); shards "
+              f"are internally consistent and all pipelines construct mixtures as "
+              f"stem sums, so this track stays in the frozen protocol")
+    if unknown:
+        for name, rel, corr in unknown:
             print(f"FAIL: {name} rel_rms {rel:.4f} corr {corr:.5f} — decode-bug signature")
         raise SystemExit(1)
-    print(f"OK: {len(rows)} tracks pass shard-integrity and decode-sanity gates")
+    n_warn = f" ({len(known)} documented-errata warning{'s' if len(known) != 1 else ''})" if known else ""
+    print(f"OK: {len(rows)} tracks pass shard-integrity and decode-sanity gates{n_warn}")
 
 
 def main(argv: list[str] | None = None) -> None:

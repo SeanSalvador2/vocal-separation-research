@@ -23,8 +23,9 @@ import prepare_data  # noqa: E402
 SR = 44100
 
 
-def _write_shards(root: Path, mixture: np.ndarray, stems: dict[str, np.ndarray]) -> None:
-    track = root / "Synth Artist - Synth Track"
+def _write_shards(root: Path, mixture: np.ndarray, stems: dict[str, np.ndarray],
+                  name: str = "Synth Artist - Synth Track") -> None:
+    track = root / name
     track.mkdir(parents=True)
     # subtype FLOAT: the default WAV subtype is PCM_16, which clips (mixture
     # peaks exceed +-1) and quantizes — fixture noise that has nothing to do
@@ -74,5 +75,26 @@ def test_shape_mismatch_fails_hard(tmp_path: Path) -> None:
     stems = _stems(rng)
     mixture = sum(stems.values())[:-100]  # truncated mixture stream
     _write_shards(tmp_path, mixture, stems)
+    with pytest.raises(SystemExit):
+        prepare_data.verify(str(tmp_path), SR)
+
+
+def test_documented_errata_track_warns_but_passes(tmp_path: Path, capsys) -> None:
+    rng = np.random.default_rng(4)
+    stems = _stems(rng)
+    mixture = sum(stems.values()).copy()
+    mixture[:, 0] *= 0.3  # the documented left-channel defect shape
+    _write_shards(tmp_path, mixture, stems, name="PR - Oh No")
+    prepare_data.verify(str(tmp_path), SR)  # WARN, not FAIL
+    out = capsys.readouterr().out
+    assert "WARN: PR - Oh No" in out and "OK" in out and "errata" in out
+
+
+def test_same_defect_on_undocumented_track_still_fails(tmp_path: Path) -> None:
+    rng = np.random.default_rng(5)
+    stems = _stems(rng)
+    mixture = sum(stems.values()).copy()
+    mixture[:, 0] *= 0.3
+    _write_shards(tmp_path, mixture, stems, name="Some Other Artist - Song")
     with pytest.raises(SystemExit):
         prepare_data.verify(str(tmp_path), SR)

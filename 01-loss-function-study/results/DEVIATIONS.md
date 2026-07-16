@@ -22,6 +22,20 @@ with date + reason.*
   tests prove the gate still catches misalignment, gain errors, and truncation
   (`tests/test_prepare_data_verify.py`). This is the first execution deviation
   and the plan's 1e-3 figure should be read as superseded by this entry.
+  **Measured on the real decode (150 tracks, 2026-07-16):** relative RMS error
+  median **0.0293**, max healthy **0.047**; min healthy correlation 0.9989. One
+  track tripped the gates — **"PR - Oh No" (rel 0.416, corr 0.941)** — and is
+  precisely the track the **official SigSep errata** documents as *"sum of
+  sources does not add up to the mix for the left channel"* (sigsep website,
+  datasets/musdb.md, fetched 2026-07-16). Resolution: a cited
+  `KNOWN_DATASET_ERRATA` allowlist in `scripts/prepare_data.py` downgrades
+  gate failures on documented-errata tracks to WARN; undocumented failures
+  still hard-fail (both behaviors unit-tested). The track **stays in the frozen
+  50-track test protocol**: its stems are internally consistent and every
+  pipeline constructs mixtures as stem sums, so evaluation is unaffected. Note
+  for Direction 06: the same errata table documents real bleed in several
+  train-split tracks (e.g. Chris Durban - Celebrate, Hop Along - Sister
+  Cities) — real-world grounding for the stem-bleed premise.
 
 Nothing has been trained; the frozen plan (MASTER_PLAN, 2026-07-13) is otherwise
 intact.
