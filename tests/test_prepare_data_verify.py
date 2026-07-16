@@ -26,9 +26,12 @@ SR = 44100
 def _write_shards(root: Path, mixture: np.ndarray, stems: dict[str, np.ndarray]) -> None:
     track = root / "Synth Artist - Synth Track"
     track.mkdir(parents=True)
-    sf.write(track / "mixture.wav", mixture, SR)
+    # subtype FLOAT: the default WAV subtype is PCM_16, which clips (mixture
+    # peaks exceed +-1) and quantizes — fixture noise that has nothing to do
+    # with the decode-sanity gates under test.
+    sf.write(track / "mixture.wav", mixture, SR, subtype="FLOAT")
     for name, wave in stems.items():
-        sf.write(track / f"{name}.wav", wave, SR)
+        sf.write(track / f"{name}.wav", wave, SR, subtype="FLOAT")
 
 
 def _stems(rng: np.random.Generator, n: int = SR) -> dict[str, np.ndarray]:
