@@ -74,6 +74,11 @@ def decode(musdb_root: str, out: str, sample_rate: int = 44100) -> None:
         mixture = track.audio.astype("float32")
         accompaniment = stems["drums"] + stems["bass"] + stems["other"]
         for name, audio in {**stems, "mixture": mixture, "accompaniment": accompaniment}.items():
+            # Default WAV subtype (PCM_16): 96 dB SNR, far below every project
+            # threshold (deepest is the -60 dBFS silence constant), and half the
+            # disk of float32. Note it hard-limits at +-1.0 — the reason the
+            # decoded mixture STREAM maxes out while the raw stem sum can reach
+            # ~4.0 at loud transients (see the 2026-07-16 DEVIATIONS entry).
             sf.write(track_dir / f"{name}.wav", audio, sample_rate)
         index[track.name] = {
             "n_samples": int(mixture.shape[0]),
