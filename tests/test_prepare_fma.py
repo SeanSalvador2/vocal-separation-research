@@ -152,7 +152,7 @@ def test_write_manifest_roundtrip_no_audio(tmp_path) -> None:
     manifest, _ = pf.prepare(_metadata(), screen=2, seed=1)
     out = tmp_path / "pseudo" / "manifest.csv"
     pf.write_manifest(out, manifest, provenance={"source": "mdeff/fma", "seed": 1, "screen": 2})
-    text = out.read_text()
+    text = out.read_text(encoding="utf-8")
     assert text.startswith("#")                       # provenance header present
     assert "NO AUDIO" in text
     back = pd.read_csv(out, comment="#", dtype=str)

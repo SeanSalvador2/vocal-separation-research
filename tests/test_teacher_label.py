@@ -143,7 +143,7 @@ def test_write_provenance_roundtrip(tmp_path) -> None:
     )
     path = tmp_path / "sub" / "provenance.json"
     tl.write_provenance(path, prov)
-    payload = json.loads(path.read_text())
+    payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["model"] == "htdemucs" and payload["demucs_version"] == "4.0.1"
     assert payload["n_kept"] == 800 and payload["used_threshold"] == 0.20
     assert payload["settings"]["two_stem"].startswith("vocals")
@@ -155,7 +155,7 @@ def test_write_provenance_roundtrip(tmp_path) -> None:
 def test_module_imports_without_demucs_or_torch() -> None:
     # The module is import-clean (demucs/torch imports live inside RUN-LATER functions).
     assert hasattr(tl, "load_teacher") and hasattr(tl, "run")
-    src = Path(tl.__file__).read_text()
+    src = Path(tl.__file__).read_text(encoding="utf-8")
     assert "def load_teacher" in src
     # the demucs import is inside a function body, never at module top level.
     top_level = [ln for ln in src.splitlines() if ln.startswith("import ") or ln.startswith("from ")]

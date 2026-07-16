@@ -7,7 +7,13 @@ import pytest
 
 
 def test_museval_wrapper_runs_if_available() -> None:
-    pytest.importorskip("museval")
+    from singnet.utils.npcompat import install_numpy2_aliases
+
+    install_numpy2_aliases()  # stempeg (via musdb/museval) predates NumPy 2
+    try:
+        pytest.importorskip("museval")
+    except RuntimeError as err:  # stempeg raises at import if ffmpeg is absent
+        pytest.skip(f"museval import needs ffmpeg on PATH: {err}")
     from singnet.metrics.museval_wrap import bss_eval_sdr, museval_version
 
     assert isinstance(museval_version(), str)

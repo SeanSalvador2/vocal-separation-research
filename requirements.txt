@@ -25,6 +25,10 @@ nbformat==5.10.4
 # not break `pytest`. Versions are resolved/frozen at data-prep time and the
 # museval version is additionally recorded in the eval CSVs (§12 version drift).
 #   musdb==0.4.2        # MUSDB18 STEMS parser + the frozen valid split list
+#   NOTE: this legacy stack needs (a) ffmpeg+ffprobe on PATH, (b) pkg_resources —
+#   i.e. setuptools<81 ("pip install 'setuptools<81'" on fresh 2026 envs), and
+#   (c) the NumPy-2 alias shim singnet/utils/npcompat.py, which prepare_data.py,
+#   teacher_label.py, and museval_wrap.py install automatically before importing.
 #   stempeg==0.2.3      # STEMS (.mp4/AAC) decoding used by prepare_data.py
 #   museval==0.4.1      # BSS-Eval v4 SDR — the clearly-labelled secondary metric
 #   demucs==4.0.1       # Direction 10: the htdemucs TEACHER (scripts/teacher_label.py, RUN LATER)

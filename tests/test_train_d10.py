@@ -146,7 +146,7 @@ def test_lazy_teacher_imports_no_demucs() -> None:
 
     teacher = LazyDemucsTeacher("htdemucs")
     assert teacher.model_name == "htdemucs" and teacher._model is None
-    src = Path(inspect.getfile(LazyDemucsTeacher)).read_text()
+    src = Path(inspect.getfile(LazyDemucsTeacher)).read_text(encoding="utf-8")
     top_level = [ln for ln in src.splitlines() if ln.startswith("import ") or ln.startswith("from ")]
     assert not any("demucs" in ln for ln in top_level)
 

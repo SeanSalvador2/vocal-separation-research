@@ -20,6 +20,8 @@ import numpy as np
 
 def museval_version() -> str:
     """Return the installed museval version (raises if museval is absent)."""
+    from ..utils.npcompat import install_numpy2_aliases
+    install_numpy2_aliases()  # museval->musdb->stempeg needs np.float_ under NumPy 2
     import museval  # local import: optional dependency
 
     return getattr(museval, "__version__", "unknown")
@@ -45,6 +47,8 @@ def bss_eval_sdr(
         nan-medians (the museum-standard median-of-frames aggregation) and the
         museval version string.
     """
+    from ..utils.npcompat import install_numpy2_aliases
+    install_numpy2_aliases()  # museval->musdb->stempeg needs np.float_ under NumPy 2
     import museval  # local import: optional dependency
 
     ref = _as_2d(reference)

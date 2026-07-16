@@ -55,6 +55,8 @@ MIX_TOLERANCE = 1e-3  # max abs error for mixture ≈ sum(stems) on MUSDB18 AAC
 
 def decode(musdb_root: str, out: str, sample_rate: int = 44100) -> None:
     """Decode every MUSDB track to ``<out>/<track>/{stem}.wav`` + mono mixdowns."""
+    from singnet.utils.npcompat import install_numpy2_aliases
+    install_numpy2_aliases()  # stempeg 0.2.3 needs np.float_ under NumPy 2
     import musdb  # optional dep
     import soundfile as sf
 

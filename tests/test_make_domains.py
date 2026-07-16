@@ -135,5 +135,5 @@ def test_write_t2_decision(tmp_path) -> None:
     dec = md.resolve_t2(None)
     path = md.write_t2_decision(tmp_path / "t2_decision.json", dec)
     assert path.exists()
-    loaded = json.loads(path.read_text())
+    loaded = json.loads(path.read_text(encoding="utf-8"))
     assert loaded["domain"] == "t2_noise12db" and "rule" in loaded
