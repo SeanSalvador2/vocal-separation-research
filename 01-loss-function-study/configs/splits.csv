@@ -1,171 +1,154 @@
-# SingNet frozen split manifest (MASTER_PLAN §4.2) - names only, no audio.
-#
-# 86 train / 14 valid / 50 test (the frozen protocol shared by all directions).
-#
-# VALIDATION (14): verbatim from the official sigsep source, verified 2026-07-13:
-#   https://raw.githubusercontent.com/sigsep/sigsep-mus-db/master/musdb/configs/mus.yaml
-#   (field: validation_tracks). This is the exact split Open-Unmix trains against.
-#
-# TRAIN (86) and TEST (50): the full MUSDB18 track-name list is NOT published in
-# any sigsep repo file (track names are the dataset filenames, which are not
-# committed anywhere for licensing reasons). The rows below are therefore
-# DOCUMENTED PLACEHOLDERS (__PLACEHOLDER_train_XXX / __PLACEHOLDER_test_XXX) that
-# fix the counts (86/50) and split flags. At data-prep time,
-#   scripts/prepare_data.py --write-manifest
-# scans the decoded MUSDB18 folders and rewrites these rows with the real track
-# names (14 valid = the names above must all appear in the 100-track train
-# folder; the remaining 86 -> train; the 50 test-folder tracks -> test), and
-#   scripts/prepare_data.py --verify
-# fails loud on any count or valid-name mismatch. Training never loads a 'test'
-# row (enforced in singnet.data.manifest + tests/test_manifest.py).
-track,split
-Actions - One Minute Smile,valid
-Clara Berry And Wooldog - Waltz For My Victims,valid
-Johnny Lokke - Promises & Lies,valid
-Patrick Talbot - A Reason To Leave,valid
-Triviul - Angelsaint,valid
-Alexander Ross - Goodbye Bolero,valid
-Fergessen - Nos Palpitants,valid
-Leaf - Summerghost,valid
-Skelpolu - Human Mistakes,valid
-Young Griffo - Pennies,valid
-ANiMAL - Rockshow,valid
-James May - On The Line,valid
-Meaxic - Take A Step,valid
-Traffic Experiment - Sirens,valid
-__PLACEHOLDER_train_000,train
-__PLACEHOLDER_train_001,train
-__PLACEHOLDER_train_002,train
-__PLACEHOLDER_train_003,train
-__PLACEHOLDER_train_004,train
-__PLACEHOLDER_train_005,train
-__PLACEHOLDER_train_006,train
-__PLACEHOLDER_train_007,train
-__PLACEHOLDER_train_008,train
-__PLACEHOLDER_train_009,train
-__PLACEHOLDER_train_010,train
-__PLACEHOLDER_train_011,train
-__PLACEHOLDER_train_012,train
-__PLACEHOLDER_train_013,train
-__PLACEHOLDER_train_014,train
-__PLACEHOLDER_train_015,train
-__PLACEHOLDER_train_016,train
-__PLACEHOLDER_train_017,train
-__PLACEHOLDER_train_018,train
-__PLACEHOLDER_train_019,train
-__PLACEHOLDER_train_020,train
-__PLACEHOLDER_train_021,train
-__PLACEHOLDER_train_022,train
-__PLACEHOLDER_train_023,train
-__PLACEHOLDER_train_024,train
-__PLACEHOLDER_train_025,train
-__PLACEHOLDER_train_026,train
-__PLACEHOLDER_train_027,train
-__PLACEHOLDER_train_028,train
-__PLACEHOLDER_train_029,train
-__PLACEHOLDER_train_030,train
-__PLACEHOLDER_train_031,train
-__PLACEHOLDER_train_032,train
-__PLACEHOLDER_train_033,train
-__PLACEHOLDER_train_034,train
-__PLACEHOLDER_train_035,train
-__PLACEHOLDER_train_036,train
-__PLACEHOLDER_train_037,train
-__PLACEHOLDER_train_038,train
-__PLACEHOLDER_train_039,train
-__PLACEHOLDER_train_040,train
-__PLACEHOLDER_train_041,train
-__PLACEHOLDER_train_042,train
-__PLACEHOLDER_train_043,train
-__PLACEHOLDER_train_044,train
-__PLACEHOLDER_train_045,train
-__PLACEHOLDER_train_046,train
-__PLACEHOLDER_train_047,train
-__PLACEHOLDER_train_048,train
-__PLACEHOLDER_train_049,train
-__PLACEHOLDER_train_050,train
-__PLACEHOLDER_train_051,train
-__PLACEHOLDER_train_052,train
-__PLACEHOLDER_train_053,train
-__PLACEHOLDER_train_054,train
-__PLACEHOLDER_train_055,train
-__PLACEHOLDER_train_056,train
-__PLACEHOLDER_train_057,train
-__PLACEHOLDER_train_058,train
-__PLACEHOLDER_train_059,train
-__PLACEHOLDER_train_060,train
-__PLACEHOLDER_train_061,train
-__PLACEHOLDER_train_062,train
-__PLACEHOLDER_train_063,train
-__PLACEHOLDER_train_064,train
-__PLACEHOLDER_train_065,train
-__PLACEHOLDER_train_066,train
-__PLACEHOLDER_train_067,train
-__PLACEHOLDER_train_068,train
-__PLACEHOLDER_train_069,train
-__PLACEHOLDER_train_070,train
-__PLACEHOLDER_train_071,train
-__PLACEHOLDER_train_072,train
-__PLACEHOLDER_train_073,train
-__PLACEHOLDER_train_074,train
-__PLACEHOLDER_train_075,train
-__PLACEHOLDER_train_076,train
-__PLACEHOLDER_train_077,train
-__PLACEHOLDER_train_078,train
-__PLACEHOLDER_train_079,train
-__PLACEHOLDER_train_080,train
-__PLACEHOLDER_train_081,train
-__PLACEHOLDER_train_082,train
-__PLACEHOLDER_train_083,train
-__PLACEHOLDER_train_084,train
-__PLACEHOLDER_train_085,train
-__PLACEHOLDER_test_000,test
-__PLACEHOLDER_test_001,test
-__PLACEHOLDER_test_002,test
-__PLACEHOLDER_test_003,test
-__PLACEHOLDER_test_004,test
-__PLACEHOLDER_test_005,test
-__PLACEHOLDER_test_006,test
-__PLACEHOLDER_test_007,test
-__PLACEHOLDER_test_008,test
-__PLACEHOLDER_test_009,test
-__PLACEHOLDER_test_010,test
-__PLACEHOLDER_test_011,test
-__PLACEHOLDER_test_012,test
-__PLACEHOLDER_test_013,test
-__PLACEHOLDER_test_014,test
-__PLACEHOLDER_test_015,test
-__PLACEHOLDER_test_016,test
-__PLACEHOLDER_test_017,test
-__PLACEHOLDER_test_018,test
-__PLACEHOLDER_test_019,test
-__PLACEHOLDER_test_020,test
-__PLACEHOLDER_test_021,test
-__PLACEHOLDER_test_022,test
-__PLACEHOLDER_test_023,test
-__PLACEHOLDER_test_024,test
-__PLACEHOLDER_test_025,test
-__PLACEHOLDER_test_026,test
-__PLACEHOLDER_test_027,test
-__PLACEHOLDER_test_028,test
-__PLACEHOLDER_test_029,test
-__PLACEHOLDER_test_030,test
-__PLACEHOLDER_test_031,test
-__PLACEHOLDER_test_032,test
-__PLACEHOLDER_test_033,test
-__PLACEHOLDER_test_034,test
-__PLACEHOLDER_test_035,test
-__PLACEHOLDER_test_036,test
-__PLACEHOLDER_test_037,test
-__PLACEHOLDER_test_038,test
-__PLACEHOLDER_test_039,test
-__PLACEHOLDER_test_040,test
-__PLACEHOLDER_test_041,test
-__PLACEHOLDER_test_042,test
-__PLACEHOLDER_test_043,test
-__PLACEHOLDER_test_044,test
-__PLACEHOLDER_test_045,test
-__PLACEHOLDER_test_046,test
-__PLACEHOLDER_test_047,test
-__PLACEHOLDER_test_048,test
-__PLACEHOLDER_test_049,test
+# SingNet split manifest — regenerated from the decoded MUSDB18 folders
+# by scripts/prepare_data.py --write-manifest. 86 train / 14 valid / 50 test.
+# The 14 valid names are the verified sigsep mus.yaml validation_tracks.
+track,split
+Actions - One Minute Smile,valid
+Clara Berry And Wooldog - Waltz For My Victims,valid
+Johnny Lokke - Promises & Lies,valid
+Patrick Talbot - A Reason To Leave,valid
+Triviul - Angelsaint,valid
+Alexander Ross - Goodbye Bolero,valid
+Fergessen - Nos Palpitants,valid
+Leaf - Summerghost,valid
+Skelpolu - Human Mistakes,valid
+Young Griffo - Pennies,valid
+ANiMAL - Rockshow,valid
+James May - On The Line,valid
+Meaxic - Take A Step,valid
+Traffic Experiment - Sirens,valid
+A Classic Education - NightOwl,train
+ANiMAL - Clinic A,train
+ANiMAL - Easy Tiger,train
+Actions - Devil's Words,train
+Actions - South Of The Water,train
+Aimee Norwich - Child,train
+Alexander Ross - Velvet Curtain,train
+Angela Thomas Wade - Milk Cow Blues,train
+Atlantis Bound - It Was My Fault For Waiting,train
+Auctioneer - Our Future Faces,train
+AvaLuna - Waterduct,train
+BigTroubles - Phantom,train
+Bill Chudziak - Children Of No-one,train
+Black Bloc - If You Want Success,train
+Celestial Shore - Die For Us,train
+Chris Durban - Celebrate,train
+Clara Berry And Wooldog - Air Traffic,train
+Clara Berry And Wooldog - Stella,train
+Cnoc An Tursa - Bannockburn,train
+Creepoid - OldTree,train
+Dark Ride - Burning Bridges,train
+Dreamers Of The Ghetto - Heavy Love,train
+Drumtracks - Ghost Bitch,train
+Faces On Film - Waiting For Ga,train
+Fergessen - Back From The Start,train
+Fergessen - The Wind,train
+Flags - 54,train
+Giselle - Moss,train
+Grants - PunchDrunk,train
+Helado Negro - Mitad Del Mundo,train
+Hezekiah Jones - Borrowed Heart,train
+Hollow Ground - Left Blind,train
+Hop Along - Sister Cities,train
+Invisible Familiars - Disturbing Wildlife,train
+James May - All Souls Moon,train
+James May - Dont Let Go,train
+James May - If You Say,train
+Jay Menon - Through My Eyes,train
+Johnny Lokke - Whisper To A Scream,train
+"Jokers, Jacks & Kings - Sea Of Leaves",train
+Leaf - Come Around,train
+Leaf - Wicked,train
+Lushlife - Toynbee Suite,train
+Matthew Entwistle - Dont You Ever,train
+Meaxic - You Listen,train
+Music Delta - 80s Rock,train
+Music Delta - Beatles,train
+Music Delta - Britpop,train
+Music Delta - Country1,train
+Music Delta - Country2,train
+Music Delta - Disco,train
+Music Delta - Gospel,train
+Music Delta - Grunge,train
+Music Delta - Hendrix,train
+Music Delta - Punk,train
+Music Delta - Reggae,train
+Music Delta - Rock,train
+Music Delta - Rockabilly,train
+Night Panther - Fire,train
+North To Alaska - All The Same,train
+Patrick Talbot - Set Me Free,train
+Phre The Eon - Everybody's Falling Apart,train
+Port St Willow - Stay Even,train
+Remember December - C U Next Time,train
+Secret Mountains - High Horse,train
+Skelpolu - Together Alone,train
+Snowmine - Curfews,train
+Spike Mullings - Mike's Sulking,train
+St Vitus - Word Gets Around,train
+Steven Clark - Bounty,train
+Strand Of Oaks - Spacestation,train
+Sweet Lights - You Let Me Down,train
+Swinging Steaks - Lost My Way,train
+The Districts - Vermont,train
+The Long Wait - Back Home To Blue,train
+The Scarlet Brand - Les Fleurs Du Mal,train
+The So So Glos - Emergency,train
+The Wrong'Uns - Rothko,train
+Tim Taler - Stalker,train
+Titanium - Haunted Age,train
+Traffic Experiment - Once More (With Feeling),train
+Triviul - Dorothy,train
+Voelund - Comfort Lives In Belief,train
+Wall Of Death - Femme,train
+Young Griffo - Blood To Bone,train
+Young Griffo - Facade,train
+AM Contra - Heart Peripheral,test
+Al James - Schoolboy Facination,test
+Angels In Amplifiers - I'm Alright,test
+Arise - Run Run Run,test
+BKS - Bulldozer,test
+BKS - Too Much,test
+Ben Carrigan - We'll Talk About It All Tonight,test
+Bobby Nobody - Stitch Up,test
+Buitraker - Revo X,test
+Carlos Gonzalez - A Place For Us,test
+Cristina Vane - So Easy,test
+Detsky Sad - Walkie Talkie,test
+Enda Reilly - Cur An Long Ag Seol,test
+Forkupines - Semantics,test
+Georgia Wonder - Siren,test
+Girls Under Glass - We Feel Alright,test
+Hollow Ground - Ill Fate,test
+James Elder & Mark M Thompson - The English Actor,test
+Juliet's Rescue - Heartbeats,test
+Little Chicago's Finest - My Own,test
+Louis Cressy Band - Good Time,test
+Lyndsey Ollard - Catching Up,test
+M.E.R.C. Music - Knockout,test
+Moosmusic - Big Dummy Shake,test
+Motor Tapes - Shore,test
+Mu - Too Bright,test
+Nerve 9 - Pray For The Rain,test
+PR - Happy Daze,test
+PR - Oh No,test
+Punkdisco - Oral Hygiene,test
+Raft Monk - Tiring,test
+Sambasevam Shanmugam - Kaathaadi,test
+Secretariat - Borderline,test
+Secretariat - Over The Top,test
+Side Effects Project - Sing With Me,test
+Signe Jakobsen - What Have You Done To Me,test
+Skelpolu - Resurrection,test
+Speak Softly - Broken Man,test
+Speak Softly - Like Horses,test
+The Doppler Shift - Atrophy,test
+The Easton Ellises (Baumi) - SDRNR,test
+The Easton Ellises - Falcon 69,test
+The Long Wait - Dark Horses,test
+The Mountaineering Club - Mallory,test
+The Sunshine Garcia Band - For I Am The Moon,test
+Timboz - Pony,test
+Tom McKenzie - Directions,test
+Triviul feat. The Fiend - Widow,test
+We Fell From The Sky - Not You,test
+Zeno - Signs,test
